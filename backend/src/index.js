@@ -4,6 +4,7 @@ import express from "express";
  
  import {connectDB} from "./lib/db.js"
  import authRoutes from "./routes/auth.route.js"
+ import messageRoutes from "./routes/message.route.js"
 
  dotenv.config()
  const app=express();
@@ -17,6 +18,9 @@ const PORT=process.env.PORT
 
 // auth routes 
 app.use("/api/auth",authRoutes)
+
+// messages routes
+app.use("/api/messages",messageRoutes)
 
 app.get("/",(req,res)=>{
     res.send("hello from backend");
