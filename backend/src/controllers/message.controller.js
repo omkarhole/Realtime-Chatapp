@@ -22,12 +22,12 @@ export const getUsersForSidebar = async (req, res) => {
 export const getMessage = async (req, res) => {
     try {
         const { id: userToChatId } = req.params;
-        const myId=req.user._id;
+        const myId = req.user._id;
 
-        const messages=await Message.find({
-            $or:[
-                {senderId:myId,receiverId:userToChatId},
-                {senderId:userToChatId,receiverId:myId}
+        const messages = await Message.find({
+            $or: [
+                { senderId: myId, receiverId: userToChatId },
+                { senderId: userToChatId, receiverId: myId }
             ]
         })
 
@@ -40,35 +40,36 @@ export const getMessage = async (req, res) => {
     }
 }
 
-export const sendMessage=async(req,res)=>{
-try{
-const {text,image}=req.body;
-const {id:receiverId}=req.params;
-const senderId=req.user._id;
+export const sendMessage = async (req, res) => {
+    try {
+        const { text, image } = req.body;
+        const { id: receiverId } = req.params;
+        const senderId = req.user._id;
 
-let imageUrl;
+        let imageUrl;
 
-//if image exists upload image to cloudinary and get the url
-if(image){
-    const uploadResponse=await cloudinary.uploader.upload(image);
-    imageUrl=uploadResponse.secure_url;
-}
+        //if image exists upload image to cloudinary and get the url
+        if (image) {
+            const uploadResponse = await cloudinary.uploader.upload(image);
+            imageUrl = uploadResponse.secure_url;
+        }
 
-const newMessage=new Message({
-    senderId,
-    reciverId,
-    text,
-    image:imageUrl
-});
-await newMessage.save();
+        const newMessage = new Message({
+            senderId,
+            //   reciverId: receiverId,
+            receiverId,
+            text,
+            image: imageUrl
+        });
+        await newMessage.save();
 
-// todo:real-time message functionality goes here => using socket.io
-res.status(201).json(newMessage);
+        // todo:real-time message functionality goes here => using socket.io
+        res.status(201).json(newMessage);
 
-}
-catch(err){
-    console.error("Error sending message:", err);
-    res.status(500).json({ message: "Internal Server Error" })
-}
+    }
+    catch (err) {
+        console.error("Error sending message:", err);
+        res.status(500).json({ message: "Internal Server Error" })
+    }
 
 }
