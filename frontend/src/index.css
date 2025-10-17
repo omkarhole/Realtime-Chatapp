@@ -1,2 +1,5 @@
 @import "tailwindcss";
-@plugin "daisyui";
+/* for theme picker  */
+@plugin "daisyui" {
+  themes: all;
+}
