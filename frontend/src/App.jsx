@@ -33,7 +33,7 @@ checkAuth();
       <Routes>
         <Route path='/' element={ authUser ?<HomePage/>:<Navigate to="/login"/>} />
         <Route path='/signup' element={ !authUser ? <SignUpPage/> : <Navigate to="/login"/>} />
-        <Route path='/login' element={!authUser ? <LoginPage/> : <Navigate to="/login"/>} />
+        <Route path='/login' element={!authUser ? <LoginPage/> : <Navigate to="/"/>} />
         <Route path='/Settings' element={<SettingsPage/>} />
         <Route path='/Profile' element={authUser? <ProfilePage/> : <Navigate to="/login"/> } />
       </Routes>
