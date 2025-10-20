@@ -6,9 +6,10 @@ import express from "express";
  import {connectDB} from "./lib/db.js"
  import authRoutes from "./routes/auth.route.js"
  import messageRoutes from "./routes/message.route.js"
+import { app,server } from "./lib/socket.js";
 
  dotenv.config()
- const app=express();
+
  
  app.use(express.json());
  app.use(cookieParser());
@@ -30,7 +31,7 @@ app.get("/",(req,res)=>{
     res.send("hello from backend");
 })
 
-app.listen(PORT,()=>{
+server.listen(PORT,()=>{
     console.log(`server is running on port ${PORT}`);
     connectDB()
 })
