@@ -1,6 +1,7 @@
 import User from "../models/user.model.js";
 import Message from "../models/message.model.js";
 import cloudinary from "../lib/cloudinary.js";
+import { getReciverSocketId, io } from "../lib/socket.js";
 
 // get all users except logged in user for sidebar
 export const getUsersForSidebar = async (req, res) => {
@@ -26,8 +27,8 @@ export const getMessage = async (req, res) => {
 
         const messages = await Message.find({
             $or: [
-               { senderId: myId, receiverId: userToChatId },
-       { senderId: userToChatId, receiverId: myId }
+                { senderId: myId, receiverId: userToChatId },
+                { senderId: userToChatId, receiverId: myId }
             ]
         })
 
@@ -43,7 +44,7 @@ export const getMessage = async (req, res) => {
 export const sendMessage = async (req, res) => {
     try {
         const { text, image } = req.body;
-        const {  id:receiverId } = req.params;
+        const { id: receiverId } = req.params;
         const senderId = req.user._id;
 
         let imageUrl;
@@ -56,12 +57,18 @@ export const sendMessage = async (req, res) => {
 
         const newMessage = new Message({
             senderId,
-         receiverId,
+            receiverId,
             text,
             image: imageUrl
         });
         await newMessage.save();
-        // todo:real-time message functionality goes here => using socket.io
+        
+        //   realtime chat using socket.io
+        const reciverSocketId = getReciverSocketId(receiverId);
+        if (reciverSocketId) {
+            // sending new msg in realtime to reciver 
+            io.to(reciverSocketId).emit("newMessage", newMessage);
+        }
         res.status(201).json(newMessage);
 
     }
