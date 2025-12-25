@@ -13,10 +13,10 @@
 </p>
 
 <p align="center">
-  <a href="#features">Features</a> •
-  <a href="#quick-start">Quick Start</a> •
-  <a href="#tech-stack">Tech Stack</a> •
-  <a href="#cost-analysis">Cost Analysis</a>
+  <a href="#-features">Features</a> •
+  <a href="#-quick-start">Quick Start</a> •
+  <a href="#️-tech-stack">Tech Stack</a> •
+  <a href="#-key-highlights">Key Highlights</a>
 </p>
 
 ---
