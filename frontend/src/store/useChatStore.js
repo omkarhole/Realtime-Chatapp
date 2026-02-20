@@ -63,7 +63,12 @@ export const useChatStore = create((set,get) => ({
         socket.on("newMessage",(newMessage)=>{
             const isMessageSendFromSelectedUser=newMessage.senderId===selectedUser._id
         if (!isMessageSendFromSelectedUser) return;
-            set({messages:[...get().messages,newMessage]});
+            // Mark as delivered when message is received
+            const messageWithStatus = { ...newMessage, status: 'delivered' };
+            set({messages:[...get().messages,messageWithStatus]});
+            
+            // Automatically mark as read since user is viewing the chat
+            get().markMessagesAsRead(selectedUser._id);
         });
     },
     unSubscribeFromMessages:()=>{
@@ -99,6 +104,50 @@ export const useChatStore = create((set,get) => ({
 
     isTyping: (userId) => {
         return get().typingUsers.includes(userId);
+    },
+
+    // Mark messages as read
+    markMessagesAsRead: async (senderId) => {
+        const { selectedUser } = get();
+        if (!selectedUser) return;
+        
+        try {
+            await axiosInstance.put(`/messages/mark-read/${senderId}`);
+            
+            // Emit socket event to notify the sender
+            const socket = useAuthStore.getState().socket;
+            if (socket) {
+                socket.emit("markAsRead", { to: senderId });
+            }
+            
+            // Update local message status
+            const updatedMessages = get().messages.map(msg => 
+                msg.senderId === senderId ? { ...msg, status: 'read' } : msg
+            );
+            set({ messages: updatedMessages });
+        }
+        catch (err) {
+            console.log("Error marking messages as read:", err);
+        }
+    },
+
+    subscribeToReadReceipts: () => {
+        const socket = useAuthStore.getState().socket;
+        if (!socket) return;
+
+        socket.on("messageRead", ({ from }) => {
+            // Update messages from the selected user to read status
+            const updatedMessages = get().messages.map(msg => 
+                msg.senderId === from ? { ...msg, status: 'read' } : msg
+            );
+            set({ messages: updatedMessages });
+        });
+    },
+
+    unSubscribeFromReadReceipts: () => {
+        const socket = useAuthStore.getState().socket;
+        if (!socket) return;
+        socket.off("messageRead");
     },
 
 }))

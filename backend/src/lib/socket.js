@@ -61,6 +61,18 @@ io.on("connection",(socket)=>{
         }
     });
 
+    // Mark messages as read
+    socket.on("markAsRead", ({ to }) => {
+        const receiverSocketId = getReciverSocketId(to);
+        if (receiverSocketId) {
+            io.to(receiverSocketId).emit("messageRead", { 
+                readerId: userId,
+                from: userId,
+                to: to 
+            });
+        }
+    });
+
 });
 
  

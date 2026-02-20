@@ -78,3 +78,36 @@ export const sendMessage = async (req, res) => {
     }
 
 }
+
+// Mark messages as read
+export const markMessageAsRead = async (req, res) => {
+    try {
+        const { senderId } = req.params; // senderId is the user whose messages we want to mark as read
+        const receiverId = req.user._id; // current logged in user is the receiver
+
+        // Update all messages from sender to receiver that are not yet read
+        const updatedMessages = await Message.updateMany(
+            { senderId, receiverId, status: { $ne: 'read' } },
+            { $set: { status: 'read' } }
+        );
+
+        // Notify the sender that their messages have been read
+        const senderSocketId = getReciverSocketId(senderId);
+        if (senderSocketId) {
+            io.to(senderSocketId).emit("messageRead", {
+                readerId: receiverId,
+                messageIds: updatedMessages.modifiedCount
+            });
+        }
+
+        res.status(200).json({ 
+            message: "Messages marked as read",
+            count: updatedMessages.modifiedCount 
+        });
+
+    }
+    catch (err) {
+        console.error("Error marking messages as read:", err);
+        res.status(500).json({ message: "Internal Server Error" })
+    }
+}
