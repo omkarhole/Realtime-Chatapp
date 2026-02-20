@@ -97,9 +97,15 @@ export const useAuthStore = create((set, get) => ({
         const {authUser}=get();
         if(!authUser||get().socket?.connected) return;
 
-        const socket=io(BASE_URL,{
-            query:{userId:authUser._id}
+        // Get the JWT token from cookies
+        const token = document.cookie
+            .split('; ')
+            .find(row => row.startsWith('jwt='))
+            ?.split('=')[1];
 
+        const socket=io(BASE_URL,{
+            query:{userId:authUser._id},
+            auth: { token }
         });
         socket.connect();
         set({socket:socket});
