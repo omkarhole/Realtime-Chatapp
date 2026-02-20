@@ -10,6 +10,9 @@ export const useChatStore = create((set,get) => ({
     isUsersLoading: false,
     isMessagesLoading: false,
     typingUsers: [],
+    searchResults: [],
+    isSearchLoading: false,
+    isSearchOpen: false,
 
     getUsers: async () => {
         set({ isUsersLoading: true });
@@ -149,5 +152,32 @@ export const useChatStore = create((set,get) => ({
         if (!socket) return;
         socket.off("messageRead");
     },
+
+    // Search messages
+    searchMessages: async (query) => {
+        if (!query || query.trim() === "") {
+            set({ searchResults: [], isSearchOpen: false });
+            return;
+        }
+        
+        try {
+            set({ isSearchLoading: true, isSearchOpen: true });
+            const res = await axiosInstance.get(`/messages/search?q=${encodeURIComponent(query)}`);
+            set({ searchResults: res.data });
+        }
+        catch (err) {
+            console.log("Error searching messages:", err);
+            toast.error("Failed to search messages");
+        }
+        finally {
+            set({ isSearchLoading: false });
+        }
+    },
+
+    // Clear search results
+    clearSearch: () => set({ searchResults: [], isSearchOpen: false }),
+
+    // Toggle search panel
+    toggleSearch: () => set((state) => ({ isSearchOpen: !state.isSearchOpen })),
 
 }))
