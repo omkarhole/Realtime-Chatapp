@@ -40,6 +40,27 @@ io.on("connection",(socket)=>{
             io.emit("getOnlineUsers",Object.keys(userSocketMap));
     })
 
+    // Typing events
+    socket.on("typing", ({ to }) => {
+        const receiverSocketId = getReciverSocketId(to);
+        if (receiverSocketId) {
+            io.to(receiverSocketId).emit("typing", { 
+                from: userId,
+                to: to 
+            });
+        }
+    });
+
+    socket.on("stopTyping", ({ to }) => {
+        const receiverSocketId = getReciverSocketId(to);
+        if (receiverSocketId) {
+            io.to(receiverSocketId).emit("stopTyping", { 
+                from: userId,
+                to: to 
+            });
+        }
+    });
+
 });
 
  

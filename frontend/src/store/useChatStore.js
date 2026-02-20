@@ -9,6 +9,7 @@ export const useChatStore = create((set,get) => ({
     selectedUser: null,
     isUsersLoading: false,
     isMessagesLoading: false,
+    typingUsers: [],
 
     getUsers: async () => {
         set({ isUsersLoading: true });
@@ -72,5 +73,32 @@ export const useChatStore = create((set,get) => ({
     
     setSelectedUser: (selectedUser) => set({ selectedUser }),
 
+    subscribeToTyping: () => {
+        const socket = useAuthStore.getState().socket;
+        if (!socket) return;
+
+        socket.on("typing", ({ from }) => {
+            const { typingUsers } = get();
+            if (!typingUsers.includes(from)) {
+                set({ typingUsers: [...typingUsers, from] });
+            }
+        });
+
+        socket.on("stopTyping", ({ from }) => {
+            const { typingUsers } = get();
+            set({ typingUsers: typingUsers.filter(userId => userId !== from) });
+        });
+    },
+
+    unSubscribeFromTyping: () => {
+        const socket = useAuthStore.getState().socket;
+        if (!socket) return;
+        socket.off("typing");
+        socket.off("stopTyping");
+    },
+
+    isTyping: (userId) => {
+        return get().typingUsers.includes(userId);
+    },
 
 }))

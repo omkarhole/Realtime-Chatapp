@@ -9,23 +9,27 @@ import { useRef } from 'react';
 
 const ChatContainer = () => {
 
-  const { messages, getMessages, isMessageLoading, selectedUser, subscribeToMessages, unSubscribeFromMessages } = useChatStore();
+  const { messages, getMessages, isMessageLoading, selectedUser, subscribeToMessages, unSubscribeFromMessages, subscribeToTyping, unSubscribeFromTyping, isTyping } = useChatStore();
   const { authUser } = useAuthStore();
   const messagesEndRef = useRef(null);
 
   useEffect(() => {
     getMessages(selectedUser._id);
     subscribeToMessages();
+    subscribeToTyping();
     return()=>{
       unSubscribeFromMessages();
+      unSubscribeFromTyping();
     }
-  }, [selectedUser._id, getMessages,subscribeToMessages,unSubscribeFromMessages]);
+  }, [selectedUser._id, getMessages,subscribeToMessages,unSubscribeFromMessages,subscribeToTyping,unSubscribeFromTyping]);
 
   useEffect(()=>{
     if(messagesEndRef.current && messages){
       messagesEndRef.current?.scrollIntoView({behavior:"smooth"});
     }
   },[messages])
+
+  const isUserTyping = selectedUser && isTyping(selectedUser._id);
 
   if (isMessageLoading) {
     return <div className='flex-1 flex flex-col overflow-auto'>
@@ -59,12 +63,30 @@ const ChatContainer = () => {
             </div>
             <div className="chat-bubble flex flex-col ">
               {message.image &&(
-                <img src={message.image} alt="message attachment" className="sm:max-w-[2      00px] rounded-md mb-2" />
+                <img src={message.image} alt="message attachment" className="sm:max-w-[200px] rounded-md mb-2" />
               )}
               {message.text && <p>{message.text}</p>}
             </div>
           </div>
         ))}
+
+        {/* Typing Indicator */}
+        {isUserTyping && (
+          <div className="chat chat-start">
+            <div className='chat-image avatar'>
+              <div className='size-10 rounded-full border'>
+                <img src={selectedUser.profilePic || "/avatar.png"} alt="profile Pic" />
+              </div>
+            </div>
+            <div className="chat-bubble">
+              <div className="flex gap-1">
+                <span className="w-2 h-2 bg-zinc-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></span>
+                <span className="w-2 h-2 bg-zinc-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></span>
+                <span className="w-2 h-2 bg-zinc-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></span>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       <MessageInput />

@@ -1,5 +1,6 @@
-import React, { useRef, useState } from 'react'
+import React, { useRef, useState, useEffect } from 'react'
 import { useChatStore } from '../store/useChatStore';
+import { useAuthStore } from '../store/useAuthStore';
 import { Image, Send } from 'lucide-react';
 import { X } from "lucide-react";
 
@@ -7,8 +8,42 @@ const MessageInput = () => {
     const [text, setText] = useState("");
     const [imagePreview, setImagePreview] = useState(null);
     const fileInputRef = useRef();
-    const { sendMessage } = useChatStore();
+    const { sendMessage, selectedUser } = useChatStore();
+    const { socket } = useAuthStore();
+    const typingTimeoutRef = useRef(null);
 
+    // Handle typing indicator
+    useEffect(() => {
+        if (!text.trim() || !selectedUser || !socket) return;
+
+        // Emit typing event
+        socket.emit("typing", { to: selectedUser._id });
+
+        // Clear previous timeout
+        if (typingTimeoutRef.current) {
+            clearTimeout(typingTimeoutRef.current);
+        }
+
+        // Emit stopTyping after 2 seconds of no typing
+        typingTimeoutRef.current = setTimeout(() => {
+            socket.emit("stopTyping", { to: selectedUser._id });
+        }, 2000);
+
+        return () => {
+            if (typingTimeoutRef.current) {
+                clearTimeout(typingTimeoutRef.current);
+            }
+        };
+    }, [text, selectedUser, socket]);
+
+    const handleTextChange = (e) => {
+        setText(e.target.value);
+        
+        // Emit stopTyping when input is cleared
+        if (!e.target.value.trim() && socket && selectedUser) {
+            socket.emit("stopTyping", { to: selectedUser._id });
+        }
+    };
 
     const handleImageChange = (e) => {
         const file = e.target.files[0];
@@ -32,6 +67,11 @@ const MessageInput = () => {
     const handleSendMessage = async (e) => {
         e.preventDefault();
         if (!text.trim() && !imagePreview) return;
+
+        // Stop typing indicator when sending message
+        if (socket && selectedUser) {
+            socket.emit("stopTyping", { to: selectedUser._id });
+        }
 
         try {
             await sendMessage({
@@ -75,7 +115,7 @@ const MessageInput = () => {
                         className="w-full input input-bordered rounded-lg input-sm sm:input-md"
                         placeholder="Type a message..."
                         value={text}
-                        onChange={(e) => setText(e.target.value)}
+                        onChange={handleTextChange}
                     />
                     <input
                         type="file"
