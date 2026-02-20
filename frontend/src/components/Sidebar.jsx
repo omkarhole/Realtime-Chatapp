@@ -1,19 +1,36 @@
 import { useEffect, useState } from "react";
 import { useChatStore } from "../store/useChatStore"
 import SidebarSkeleton from "./SidebarSkeleton";
-import { Users } from "lucide-react";
+import { Users, Search, X } from "lucide-react";
 import { useAuthStore } from "../store/useAuthStore";
+import SearchResults from "./SearchResults";
 
 const Sidebar = () => {
-  const { getUsers, users, selectedUser, setSelectedUser, isUserLoading } = useChatStore();
+  const { getUsers, users, selectedUser, setSelectedUser, isUserLoading, searchMessages, searchResults, isSearchLoading, clearSearch, isSearchOpen } = useChatStore();
   const {onlineUsers} = useAuthStore();
-    const [showOnlineOnly, setShowOnlineOnly] = useState(false);
+  const [showOnlineOnly, setShowOnlineOnly] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
 
   useEffect(() => {
     getUsers();
   }, [getUsers])
 
   const filteredUsers = showOnlineOnly? users.filter((user) => onlineUsers.includes(user._id)): users;
+
+  const handleSearch = (e) => {
+    const query = e.target.value;
+    setSearchQuery(query);
+    if (query.trim()) {
+      searchMessages(query);
+    } else {
+      clearSearch();
+    }
+  };
+
+  const handleClearSearch = () => {
+    setSearchQuery("");
+    clearSearch();
+  };
 
   if (isUserLoading) {
     return <SidebarSkeleton />
@@ -25,7 +42,27 @@ const Sidebar = () => {
           <Users className="size-6" />
           <span className="font-medium hidden lg:block">Contacts</span>
         </div>
-        {/* online filter toogle  */}
+        
+        {/* Search Input */}
+        <div className="mt-3 relative">
+          <div className="flex items-center gap-2">
+            <Search className="size-4 text-zinc-400" />
+            <input
+              type="text"
+              placeholder="Search messages..."
+              value={searchQuery}
+              onChange={handleSearch}
+              className="input input-sm input-bordered w-full bg-base-200"
+            />
+            {searchQuery && (
+              <button onClick={handleClearSearch} className="absolute right-2">
+                <X className="size-4 text-zinc-400" />
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* online filter toggle */}
         <div className="mt-3 hidden lg:flex items-center gap-2">
           <label className="cursor-pointer flex items-center gap-2">
             <input
@@ -39,6 +76,18 @@ const Sidebar = () => {
           <span className="text-xs text-zinc-500">({onlineUsers.length - 1} online)</span>
         </div>
       </div>
+      
+      {/* Search Results Panel */}
+      {isSearchOpen && (
+        <div className="border-b border-base-300 max-h-64 overflow-y-auto">
+          <SearchResults 
+            results={searchResults} 
+            isLoading={isSearchLoading} 
+            onClose={handleClearSearch}
+          />
+        </div>
+      )}
+      
       <div className="overflow-y-auto w-full py-3">
         {filteredUsers.map((user) => (
           <button

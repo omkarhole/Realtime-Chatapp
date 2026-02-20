@@ -111,3 +111,36 @@ export const markMessageAsRead = async (req, res) => {
         res.status(500).json({ message: "Internal Server Error" })
     }
 }
+
+// Search messages by text content
+export const searchMessages = async (req, res) => {
+    try {
+        const { q: searchQuery } = req.query;
+        const userId = req.user._id;
+
+        if (!searchQuery || searchQuery.trim() === "") {
+            return res.status(400).json({ message: "Search query is required" });
+        }
+
+        // Search for messages where the user is either sender or receiver
+        // and the text contains the search query (case-insensitive)
+        const messages = await Message.find({
+            $or: [
+                { senderId: userId },
+                { receiverId: userId }
+            ],
+            text: { $regex: searchQuery, $options: 'i' }
+        })
+        .populate('senderId', 'fullName profilePic')
+        .populate('receiverId', 'fullName profilePic')
+        .sort({ createdAt: -1 }) // Most recent first
+        .limit(50); // Limit results to 50 messages
+
+        res.status(200).json(messages);
+
+    }
+    catch (err) {
+        console.error("Error searching messages:", err);
+        res.status(500).json({ message: "Internal Server Error" })
+    }
+}
