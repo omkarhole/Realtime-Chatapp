@@ -1,9 +1,9 @@
 import { useChatStore } from "../store/useChatStore"
 import { useAuthStore } from "../store/useAuthStore"
-import { X } from "lucide-react";
+import { X, Download } from "lucide-react";
 const ChatHeader = () => {
 
-    const { selectedUser, setSelectedUser } = useChatStore();
+    const { selectedUser, setSelectedUser, exportChatHistory } = useChatStore();
     const { onlineUsers } = useAuthStore();
     return (
         <div className="p-2.5 border-b border-base-300">
@@ -23,10 +23,21 @@ const ChatHeader = () => {
                         </p>
                     </div>
                 </div>
-                {/* Close button */}
-                <button onClick={() => setSelectedUser(null)}>
-                    <X />
-                </button>
+                {/* Action buttons */}
+                <div className="flex items-center gap-2">
+                    {/* Export button */}
+                    <button 
+                        onClick={exportChatHistory} 
+                        className="btn btn-ghost btn-sm btn-circle"
+                        title="Export chat history"
+                    >
+                        <Download size={18} />
+                    </button>
+                    {/* Close button */}
+                    <button onClick={() => setSelectedUser(null)} className="btn btn-ghost btn-sm btn-circle">
+                        <X />
+                    </button>
+                </div>
 
             </div>
         </div>
