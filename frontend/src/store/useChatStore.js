@@ -180,4 +180,50 @@ export const useChatStore = create((set,get) => ({
     // Toggle search panel
     toggleSearch: () => set((state) => ({ isSearchOpen: !state.isSearchOpen })),
 
+    // Export chat history as JSON file
+    exportChatHistory: async () => {
+        try {
+            toast.loading("Exporting chat history...");
+            const res = await axiosInstance.get("/messages/all");
+            const allMessages = res.data;
+
+            // Format the data for export
+            const exportData = {
+                exportDate: new Date().toISOString(),
+                totalMessages: allMessages.length,
+                messages: allMessages.map(msg => ({
+                    _id: msg._id,
+                    senderId: msg.senderId?._id || msg.senderId,
+                    senderName: msg.senderId?.fullName || 'Unknown',
+                    receiverId: msg.receiverId?._id || msg.receiverId,
+                    receiverName: msg.receiverId?.fullName || 'Unknown',
+                    text: msg.text || '',
+                    image: msg.image || null,
+                    status: msg.status,
+                    createdAt: msg.createdAt,
+                    updatedAt: msg.updatedAt
+                }))
+            };
+
+            // Create and download JSON file
+            const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = `chat-history-${new Date().toISOString().split('T')[0]}.json`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(url);
+
+            toast.dismiss();
+            toast.success(`Exported ${allMessages.length} messages successfully!`);
+        }
+        catch (err) {
+            console.log("Error exporting chat history:", err);
+            toast.dismiss();
+            toast.error("Failed to export chat history");
+        }
+    },
+
 }))

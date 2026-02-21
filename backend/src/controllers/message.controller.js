@@ -144,3 +144,28 @@ export const searchMessages = async (req, res) => {
         res.status(500).json({ message: "Internal Server Error" })
     }
 }
+
+// Export all messages for the logged-in user
+export const getAllMessages = async (req, res) => {
+    try {
+        const userId = req.user._id;
+
+        // Get all messages where user is either sender or receiver
+        const messages = await Message.find({
+            $or: [
+                { senderId: userId },
+                { receiverId: userId }
+            ]
+        })
+        .populate('senderId', 'fullName profilePic')
+        .populate('receiverId', 'fullName profilePic')
+        .sort({ createdAt: 1 }); // Oldest first for export
+
+        res.status(200).json(messages);
+
+    }
+    catch (err) {
+        console.error("Error exporting messages:", err);
+        res.status(500).json({ message: "Internal Server Error" })
+    }
+}
