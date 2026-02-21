@@ -17,6 +17,9 @@ const messageSchema=new mongoose.Schema({
     image:{
         type:String,
     },
+    pdf:{
+        type:String,
+    },
     status:{
         type:String,
         enum:['sent','delivered','read'],

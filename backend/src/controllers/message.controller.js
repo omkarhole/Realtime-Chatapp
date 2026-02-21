@@ -43,11 +43,12 @@ export const getMessage = async (req, res) => {
 
 export const sendMessage = async (req, res) => {
     try {
-        const { text, image } = req.body;
+        const { text, image, pdf } = req.body;
         const { id: receiverId } = req.params;
         const senderId = req.user._id;
 
         let imageUrl;
+        let pdfUrl;
 
         //if image exists upload image to cloudinary and get the url
         if (image) {
@@ -55,11 +56,20 @@ export const sendMessage = async (req, res) => {
             imageUrl = uploadResponse.secure_url;
         }
 
+        //if pdf exists upload pdf to cloudinary and get the url
+        if (pdf) {
+            const uploadResponse = await cloudinary.uploader.upload(pdf, {
+                resource_type: "raw"
+            });
+            pdfUrl = uploadResponse.secure_url;
+        }
+
         const newMessage = new Message({
             senderId,
             receiverId,
             text,
-            image: imageUrl
+            image: imageUrl,
+            pdf: pdfUrl
         });
         await newMessage.save();
         
