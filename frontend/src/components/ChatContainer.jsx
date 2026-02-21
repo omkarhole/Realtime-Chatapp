@@ -6,6 +6,7 @@ import MessageSkeleton from './MessageSkeleton';
 import { useAuthStore } from '../store/useAuthStore';
 import { formatMessageTime } from '../lib/utils';
 import { useRef } from 'react';
+import { FileText, Download } from 'lucide-react';
 
 const ChatContainer = () => {
 
@@ -51,6 +52,15 @@ const ChatContainer = () => {
     }
   };
 
+  // Helper function to get file name from URL
+  const getFileName = (url) => {
+    if (!url) return 'Document';
+    const parts = url.split('/');
+    const fileName = parts[parts.length - 1];
+    // Remove file extension and decode
+    return decodeURIComponent(fileName.replace(/\.[^/.]+$/, ''));
+  };
+
   if (isMessagesLoading) {
     return <div className='flex-1 flex flex-col overflow-auto'>
       <ChatHeader />
@@ -85,6 +95,21 @@ const ChatContainer = () => {
             <div className="chat-bubble flex flex-col ">
               {message.image && (
                 <img src={message.image} alt="message attachment" className="sm:max-w-[200px] rounded-md mb-2" />
+              )}
+              {message.pdf && (
+                <a 
+                  href={message.pdf} 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-2 p-2 rounded-lg border border-zinc-600 hover:bg-zinc-700 transition-colors mb-2 max-w-[200px]"
+                >
+                  <FileText size={24} className="text-red-500 flex-shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm text-zinc-200 truncate">{getFileName(message.pdf)}</p>
+                    <p className="text-xs text-zinc-400">Document</p>
+                  </div>
+                  <Download size={16} className="text-zinc-400 flex-shrink-0" />
+                </a>
               )}
               {message.text && <p>{message.text}</p>}
             </div>

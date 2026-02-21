@@ -1,13 +1,17 @@
 import React, { useRef, useState, useEffect } from 'react'
 import { useChatStore } from '../store/useChatStore';
 import { useAuthStore } from '../store/useAuthStore';
-import { Image, Send } from 'lucide-react';
+import { Image, Send, Paperclip, FileText } from 'lucide-react';
 import { X } from "lucide-react";
+import { toast } from "react-hot-toast";
 
 const MessageInput = () => {
     const [text, setText] = useState("");
     const [imagePreview, setImagePreview] = useState(null);
+    const [pdfPreview, setPdfPreview] = useState(null);
+    const [pdfName, setPdfName] = useState(null);
     const fileInputRef = useRef();
+    const pdfInputRef = useRef();
     const { sendMessage, selectedUser } = useChatStore();
     const { socket } = useAuthStore();
     const typingTimeoutRef = useRef(null);
@@ -59,14 +63,39 @@ const MessageInput = () => {
         reader.readAsDataURL(file);
     };
 
+    const handlePdfChange = (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        // Accept PDF and document files (pdf, doc, docx)
+        const allowedTypes = ['application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'];
+        if (!allowedTypes.includes(file.type)) {
+            toast.error("Please select a PDF or document file");
+            return;
+        }
+
+        const reader = new FileReader();
+        reader.onloadend = () => {
+            setPdfPreview(reader.result);
+            setPdfName(file.name);
+        };
+        reader.readAsDataURL(file);
+    };
+
     const removeImage = () => {
         setImagePreview(null);
         if (fileInputRef.current) fileInputRef.current.value = "";
     };
 
+    const removePdf = () => {
+        setPdfPreview(null);
+        setPdfName(null);
+        if (pdfInputRef.current) pdfInputRef.current.value = "";
+    };
+
     const handleSendMessage = async (e) => {
         e.preventDefault();
-        if (!text.trim() && !imagePreview) return;
+        if (!text.trim() && !imagePreview && !pdfPreview) return;
 
         // Stop typing indicator when sending message
         if (socket && selectedUser) {
@@ -77,12 +106,16 @@ const MessageInput = () => {
             await sendMessage({
                 text: text.trim(),
                 image: imagePreview,
+                pdf: pdfPreview,
             });
 
             // Clear form
             setText("");
             setImagePreview(null);
+            setPdfPreview(null);
+            setPdfName(null);
             if (fileInputRef.current) fileInputRef.current.value = "";
+            if (pdfInputRef.current) pdfInputRef.current.value = "";
         } catch (error) {
             console.error("Failed to send message:", error);
         }
@@ -108,6 +141,24 @@ const MessageInput = () => {
                     </div>
                 </div>
             )}
+            
+            {pdfPreview && (
+                <div className="mb-3 flex items-center gap-2">
+                    <div className="relative flex items-center gap-2 p-2 rounded-lg border border-zinc-700 bg-base-200">
+                        <FileText size={24} className="text-red-500" />
+                        <span className="text-sm text-zinc-300 max-w-[150px] truncate">{pdfName}</span>
+                        <button
+                            onClick={removePdf}
+                            className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-base-300
+              flex items-center justify-center"
+                            type="button"
+                        >
+                            <X className="size-3" />
+                        </button>
+                    </div>
+                </div>
+            )}
+            
             <form onSubmit={handleSendMessage} className="flex items-center gap-2">
                 <div className="flex-1 flex gap-2">
                     <input
@@ -124,6 +175,14 @@ const MessageInput = () => {
                         ref={fileInputRef}
                         onChange={handleImageChange}
                     />
+                    
+                    <input
+                        type="file"
+                        accept=".pdf,.doc,.docx"
+                        className="hidden"
+                        ref={pdfInputRef}
+                        onChange={handlePdfChange}
+                    />
 
                     <button
                         type="button"
@@ -133,11 +192,20 @@ const MessageInput = () => {
                     >
                         <Image size={20} />
                     </button>
+                    
+                    <button
+                        type="button"
+                        className={`hidden sm:flex btn btn-circle
+                     ${pdfPreview ? "text-emerald-500" : "text-zinc-400"}`}
+                        onClick={() => pdfInputRef.current?.click()}
+                    >
+                        <Paperclip size={20} />
+                    </button>
                 </div>
                 <button
                     type="submit"
                     className="btn btn-sm btn-circle"
-                    disabled={!text.trim() && !imagePreview}
+                    disabled={!text.trim() && !imagePreview && !pdfPreview}
                 >
                     <Send size={22} />
                 </button>
