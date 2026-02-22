@@ -8,7 +8,7 @@ import authRoutes from "./routes/auth.route.js";
 import messageRoutes from "./routes/message.route.js";
 import { app, server } from "./lib/socket.js";
 
-dotenv.config({ path: ".local.env" });
+dotenv.config();
 
 app.use(express.json({ limit: "10mb" }));
 app.use(cookieParser());
@@ -36,10 +36,10 @@ const PORT = process.env.PORT || 5001;
 
 
 // auth routes 
-app.use("/api/auth",authRoutes)
+app.use("/api/auth", authRoutes)
 
 // messages routes
-app.use("/api/messages",messageRoutes)
+app.use("/api/messages", messageRoutes)
 
 
 if (process.env.NODE_ENV === "production") {
@@ -50,11 +50,11 @@ if (process.env.NODE_ENV === "production") {
   });
 }
 
-app.get("/",(req,res)=>{
-    res.send("hello from backend");
+app.get("/", (req, res) => {
+  res.send("hello from backend");
 })
 
-server.listen(PORT,()=>{
-    console.log(`server is running on port ${PORT}`);
-    connectDB()
+server.listen(PORT, () => {
+  console.log(`server is running on port ${PORT}`);
+  connectDB()
 })
