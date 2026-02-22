@@ -13,6 +13,13 @@ export const useChatStore = create((set,get) => ({
     searchResults: [],
     isSearchLoading: false,
     isSearchOpen: false,
+    replyingTo: null, // State to track the message being replied to
+
+    // Set the message to reply to
+    setReplyingTo: (message) => set({ replyingTo: message }),
+
+    // Clear the reply state
+    clearReplyingTo: () => set({ replyingTo: null }),
 
     getUsers: async () => {
         set({ isUsersLoading: true });
@@ -44,10 +51,14 @@ export const useChatStore = create((set,get) => ({
         }
     },
     sendMessage: async (messageData) => {
-        const{selectedUser,messages}=get();
+        const{selectedUser,messages, replyingTo, clearReplyingTo}=get();
         try {
             const res=await axiosInstance.post(`/messages/send/${selectedUser._id}`,messageData);
             set({messages:[...messages,res.data]});
+            // Clear the replyingTo state after sending
+            if (replyingTo) {
+                clearReplyingTo();
+            }
            toast.success("message send sucessfully ");
         }
         catch (err) {

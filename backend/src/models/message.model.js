@@ -40,6 +40,11 @@ const messageSchema=new mongoose.Schema({
             default: Date.now
         }
     }],
+    replyTo: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "message",
+        default: null
+    },
 
 },
 {timestamps:true}
