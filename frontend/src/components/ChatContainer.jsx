@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react'
+import React, { useEffect, useState } from 'react'
 import { useChatStore } from '../store/useChatStore';
 import ChatHeader from './ChatHeader';
 import MessageInput from './MessageInput';
@@ -7,24 +7,28 @@ import { useAuthStore } from '../store/useAuthStore';
 import { formatMessageTime } from '../lib/utils';
 import { useRef } from 'react';
 import { FileText, Download } from 'lucide-react';
+import EmojiPicker from './EmojiPicker';
 
 const ChatContainer = () => {
 
-  const { messages, getMessages, isMessagesLoading, selectedUser, subscribeToMessages, unSubscribeFromMessages, subscribeToTyping, unSubscribeFromTyping, isTyping, markMessagesAsRead, subscribeToReadReceipts, unSubscribeFromReadReceipts } = useChatStore();
+  const { messages, getMessages, isMessagesLoading, selectedUser, subscribeToMessages, unSubscribeFromMessages, subscribeToTyping, unSubscribeFromTyping, isTyping, markMessagesAsRead, subscribeToReadReceipts, unSubscribeFromReadReceipts, subscribeToReactions, unSubscribeFromReactions, addReaction, removeReaction } = useChatStore();
   const { authUser } = useAuthStore();
   const messagesEndRef = useRef(null);
+  const [messageReactions, setMessageReactions] = useState({});
 
   useEffect(() => {
     getMessages(selectedUser._id);
     subscribeToMessages();
     subscribeToTyping();
     subscribeToReadReceipts();
+    subscribeToReactions();
     return () => {
       unSubscribeFromMessages();
       unSubscribeFromTyping();
       unSubscribeFromReadReceipts();
+      unSubscribeFromReactions();
     };
-  }, [selectedUser._id, getMessages, subscribeToMessages, unSubscribeFromMessages, subscribeToTyping, unSubscribeFromTyping, subscribeToReadReceipts, unSubscribeFromReadReceipts]);
+  }, [selectedUser._id, getMessages, subscribeToMessages, unSubscribeFromMessages, subscribeToTyping, unSubscribeFromTyping, subscribeToReadReceipts, unSubscribeFromReadReceipts, subscribeToReactions, unSubscribeFromReactions]);
 
   // Mark messages as read when user opens chat
   useEffect(() => {
@@ -61,6 +65,34 @@ const ChatContainer = () => {
     return decodeURIComponent(fileName.replace(/\.[^/.]+$/, ''));
   };
 
+  // Handle adding a reaction
+  const handleAddReaction = (messageId, emoji) => {
+    addReaction(messageId, emoji);
+  };
+
+  // Handle removing a reaction
+  const handleRemoveReaction = (messageId, emoji) => {
+    removeReaction(messageId, emoji);
+  };
+
+  // Check if user has reacted with a specific emoji
+  const hasUserReacted = (reactions, emoji) => {
+    return reactions?.some(r => r.userId === authUser._id && r.emoji === emoji);
+  };
+
+  // Group reactions by emoji
+  const groupReactions = (reactions) => {
+    if (!reactions || reactions.length === 0) return [];
+    const grouped = {};
+    reactions.forEach(r => {
+      if (!grouped[r.emoji]) {
+        grouped[r.emoji] = [];
+      }
+      grouped[r.emoji].push(r.userId);
+    });
+    return Object.entries(grouped).map(([emoji, users]) => ({ emoji, count: users.length, users }));
+  };
+
   if (isMessagesLoading) {
     return <div className='flex-1 flex flex-col overflow-auto'>
       <ChatHeader />
@@ -92,7 +124,7 @@ const ChatContainer = () => {
               </time>
               {message.senderId === authUser._id && renderMessageStatus(message.status)}
             </div>
-            <div className="chat-bubble flex flex-col ">
+            <div className="chat-bubble flex flex-col relative group">
               {message.image && (
                 <img src={message.image} alt="message attachment" className="sm:max-w-[200px] rounded-md mb-2" />
               )}
@@ -112,7 +144,40 @@ const ChatContainer = () => {
                 </a>
               )}
               {message.text && <p>{message.text}</p>}
+              
+              {/* Reaction button - visible on hover */}
+              <div className="absolute -bottom-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                <EmojiPicker 
+                  onSelect={(emoji) => handleAddReaction(message._id, emoji)} 
+                />
+              </div>
             </div>
+            
+            {/* Reactions display */}
+            {message.reactions && message.reactions.length > 0 && (
+              <div className="flex items-center gap-1 mt-1 flex-wrap">
+                {groupReactions(message.reactions).map((group, idx) => (
+                  <button
+                    key={idx}
+                    onClick={() => {
+                      if (hasUserReacted(message.reactions, group.emoji)) {
+                        handleRemoveReaction(message._id, group.emoji);
+                      } else {
+                        handleAddReaction(message._id, group.emoji);
+                      }
+                    }}
+                    className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-xs border ${
+                      hasUserReacted(message.reactions, group.emoji)
+                        ? 'bg-blue-500/20 border-blue-500'
+                        : 'bg-zinc-700/50 border-zinc-600'
+                    } hover:bg-zinc-600 transition-colors`}
+                  >
+                    <span>{group.emoji}</span>
+                    <span className="text-zinc-300">{group.count}</span>
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
         ))}
 

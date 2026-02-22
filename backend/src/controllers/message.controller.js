@@ -179,3 +179,143 @@ export const getAllMessages = async (req, res) => {
         res.status(500).json({ message: "Internal Server Error" })
     }
 }
+
+// Add reaction to a message
+export const addReaction = async (req, res) => {
+    try {
+        const { messageId } = req.params;
+        const { emoji } = req.body;
+        const userId = req.user._id;
+
+        if (!emoji) {
+            return res.status(400).json({ message: "Emoji is required" });
+        }
+
+        const message = await Message.findById(messageId);
+        
+        if (!message) {
+            return res.status(404).json({ message: "Message not found" });
+        }
+
+        // Check if user already reacted with this emoji
+        const existingReaction = message.reactions.find(
+            r => r.userId.toString() === userId.toString() && r.emoji === emoji
+        );
+
+        if (existingReaction) {
+            return res.status(400).json({ message: "Reaction already exists" });
+        }
+
+        // Remove any existing reaction from this user first (if they want to change emoji)
+        message.reactions = message.reactions.filter(
+            r => r.userId.toString() !== userId.toString()
+        );
+
+        // Add new reaction
+        message.reactions.push({
+            userId,
+            emoji
+        });
+
+        await message.save();
+
+        // Populate user details for the new reaction
+        await message.populate('reactions.userId', 'fullName profilePic');
+
+        // Get the updated message with populated reaction user
+        const updatedMessage = await Message.findById(messageId)
+            .populate('senderId', 'fullName profilePic')
+            .populate('receiverId', 'fullName profilePic')
+            .populate('reactions.userId', 'fullName profilePic');
+
+        // Notify sender and receiver about the reaction via socket
+        const senderSocketId = getReciverSocketId(message.senderId);
+        const receiverSocketId = getReciverSocketId(message.receiverId);
+
+        const reactionData = {
+            messageId,
+            reaction: {
+                userId,
+                emoji,
+                user: req.user
+            }
+        };
+
+        if (senderSocketId) {
+            io.to(senderSocketId).emit("reactionAdded", reactionData);
+        }
+        if (receiverSocketId) {
+            io.to(receiverSocketId).emit("reactionAdded", reactionData);
+        }
+
+        res.status(200).json(updatedMessage);
+
+    }
+    catch (err) {
+        console.error("Error adding reaction:", err);
+        res.status(500).json({ message: "Internal Server Error" })
+    }
+}
+
+// Remove reaction from a message
+export const removeReaction = async (req, res) => {
+    try {
+        const { messageId } = req.params;
+        const { emoji } = req.body;
+        const userId = req.user._id;
+
+        const message = await Message.findById(messageId);
+        
+        if (!message) {
+            return res.status(404).json({ message: "Message not found" });
+        }
+
+        // Check if user has reacted with this emoji
+        const existingReaction = message.reactions.find(
+            r => r.userId.toString() === userId.toString() && r.emoji === emoji
+        );
+
+        if (!existingReaction) {
+            return res.status(400).json({ message: "Reaction not found" });
+        }
+
+        // Remove the reaction
+        message.reactions = message.reactions.filter(
+            r => !(r.userId.toString() === userId.toString() && r.emoji === emoji)
+        );
+
+        await message.save();
+
+        // Get the updated message
+        const updatedMessage = await Message.findById(messageId)
+            .populate('senderId', 'fullName profilePic')
+            .populate('receiverId', 'fullName profilePic')
+            .populate('reactions.userId', 'fullName profilePic');
+
+        // Notify sender and receiver about the removed reaction via socket
+        const senderSocketId = getReciverSocketId(message.senderId);
+        const receiverSocketId = getReciverSocketId(message.receiverId);
+
+        const reactionData = {
+            messageId,
+            reaction: {
+                userId,
+                emoji
+            }
+        };
+
+        if (senderSocketId) {
+            io.to(senderSocketId).emit("reactionRemoved", reactionData);
+        }
+        if (receiverSocketId) {
+            io.to(receiverSocketId).emit("reactionRemoved", reactionData);
+        }
+
+        res.status(200).json(updatedMessage);
+
+    }
+    catch (err) {
+        console.error("Error removing reaction:", err);
+        res.status(500).json({ message: "Internal Server Error" })
+    }
+}
