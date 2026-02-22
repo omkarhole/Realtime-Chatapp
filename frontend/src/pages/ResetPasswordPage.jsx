@@ -2,6 +2,9 @@ import { useState } from "react";
 import { Lock, MessageSquare, KeyRound, EyeOff, Eye } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import AuthImagePattern from "../components/AuthImagePattern";
+import { useAuthStore } from "../store/useAuthStore";
+import toast from "react-hot-toast";
+import { Loader2 } from "lucide-react";
 
 const ResetPasswordPage = () => {
     const [showPassword, setShowPassword] = useState(false);
@@ -10,13 +13,15 @@ const ResetPasswordPage = () => {
         password: "",
         confirmPassword: "",
     });
+    const { resetPassword, isResettingPassword } = useAuthStore();
     const navigate = useNavigate();
 
     const handleSubmit = (e) => {
         e.preventDefault();
-        console.log("Resetting password with:", formData);
-
-        navigate("/login");
+        if (formData.password !== formData.confirmPassword) {
+            return toast.error("Passwords do not match");
+        }
+        resetPassword(formData, navigate);
     };
 
     return (
@@ -107,8 +112,15 @@ const ResetPasswordPage = () => {
                             </div>
                         </div>
 
-                        <button type="submit" className="btn btn-primary w-full">
-                            Reset Password
+                        <button type="submit" className="btn btn-primary w-full" disabled={isResettingPassword}>
+                            {isResettingPassword ? (
+                                <>
+                                    <Loader2 className="size-5 animate-spin" />
+                                    Resetting...
+                                </>
+                            ) : (
+                                "Reset Password"
+                            )}
                         </button>
                     </form>
                 </div>

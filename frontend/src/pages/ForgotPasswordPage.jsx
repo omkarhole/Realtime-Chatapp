@@ -2,15 +2,17 @@ import { useState } from "react";
 import { Mail, MessageSquare, ArrowLeft } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import AuthImagePattern from "../components/AuthImagePattern";
+import { useAuthStore } from "../store/useAuthStore";
+import { Loader2 } from "lucide-react";
 
 const ForgotPasswordPage = () => {
     const [email, setEmail] = useState("");
+    const { forgotPassword, isSendingOtp } = useAuthStore();
     const navigate = useNavigate();
 
     const handleSubmit = (e) => {
         e.preventDefault();
-        console.log("Sending recovery email to:", email);
-        navigate("/reset-password");
+        forgotPassword({ email }, navigate);
     };
 
     return (
@@ -51,8 +53,15 @@ const ForgotPasswordPage = () => {
                             </div>
                         </div>
 
-                        <button type="submit" className="btn btn-primary w-full">
-                            Send OTP
+                        <button type="submit" className="btn btn-primary w-full" disabled={isSendingOtp}>
+                            {isSendingOtp ? (
+                                <>
+                                    <Loader2 className="size-5 animate-spin" />
+                                    Sending...
+                                </>
+                            ) : (
+                                "Send OTP"
+                            )}
                         </button>
                     </form>
 

@@ -1,17 +1,19 @@
 import { create } from "zustand"
 import { axiosInstance } from "../lib/axios";
 import toast from "react-hot-toast";
-import {io} from "socket.io-client";
+import { io } from "socket.io-client";
 
-const BASE_URL = import.meta.env.MODE === "development" 
-  ? "http://localhost:5001" 
-  : import.meta.env.VITE_BACKEND_URL;
+const BASE_URL = import.meta.env.MODE === "development"
+    ? "http://localhost:5001"
+    : import.meta.env.VITE_BACKEND_URL;
 
 export const useAuthStore = create((set, get) => ({
     authUser: null,
     isSigningUp: false,
     isLoggingIn: false,
     isUpdatingProfile: false,
+    isSendingOtp: false,
+    isResettingPassword: false,
 
     isCheckingAuth: true,
     onlineUsers: [],
@@ -74,7 +76,35 @@ export const useAuthStore = create((set, get) => ({
         }
         catch (err) {
             console.log("error in logout", err);
-            toast.error(err.response.data.message);
+            toast.error(err.response?.data?.message || "Failed to logout");
+        }
+    },
+
+    forgotPassword: async (data, navigate) => {
+        set({ isSendingOtp: true });
+        try {
+            const res = await axiosInstance.post("/auth/forgot-password", data);
+            toast.success(res.data.message || "OTP sent to email");
+            navigate("/reset-password");
+        } catch (err) {
+            console.log("error in forgot password", err);
+            toast.error(err.response?.data?.message || "Failed to send OTP");
+        } finally {
+            set({ isSendingOtp: false });
+        }
+    },
+
+    resetPassword: async (data, navigate) => {
+        set({ isResettingPassword: true });
+        try {
+            const res = await axiosInstance.post("/auth/reset-password", { otp: data.otp, password: data.password });
+            toast.success(res.data.message || "Password reset successfully");
+            navigate("/login");
+        } catch (err) {
+            console.log("error in reset password", err);
+            toast.error(err.response?.data?.message || "Failed to reset password");
+        } finally {
+            set({ isResettingPassword: false });
         }
     },
 
@@ -94,8 +124,8 @@ export const useAuthStore = create((set, get) => ({
         }
     },
     connectSocket: () => {
-        const {authUser}=get();
-        if(!authUser||get().socket?.connected) return;
+        const { authUser } = get();
+        if (!authUser || get().socket?.connected) return;
 
         // Get the JWT token from cookies
         const token = document.cookie
@@ -103,18 +133,18 @@ export const useAuthStore = create((set, get) => ({
             .find(row => row.startsWith('jwt='))
             ?.split('=')[1];
 
-        const socket=io(BASE_URL,{
-            query:{userId:authUser._id},
+        const socket = io(BASE_URL, {
+            query: { userId: authUser._id },
             auth: { token }
         });
         socket.connect();
-        set({socket:socket});
-        socket.on("getOnlineUsers",(userIds)=>{
-            set({onlineUsers:userIds});
+        set({ socket: socket });
+        socket.on("getOnlineUsers", (userIds) => {
+            set({ onlineUsers: userIds });
         })
 
     },
-     disConnectSocket: () => {
-        if(get().socket?.connected) get().socket.disconnect();
-     },
+    disConnectSocket: () => {
+        if (get().socket?.connected) get().socket.disconnect();
+    },
 }))
