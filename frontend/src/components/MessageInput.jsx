@@ -4,6 +4,7 @@ import { useAuthStore } from '../store/useAuthStore';
 import { Image, Send, Paperclip, FileText } from 'lucide-react';
 import { X } from "lucide-react";
 import { toast } from "react-hot-toast";
+import ReplyPreview from './ReplyPreview';
 
 const MessageInput = () => {
     const [text, setText] = useState("");
@@ -12,7 +13,7 @@ const MessageInput = () => {
     const [pdfName, setPdfName] = useState(null);
     const fileInputRef = useRef();
     const pdfInputRef = useRef();
-    const { sendMessage, selectedUser } = useChatStore();
+    const { sendMessage, selectedUser, replyingTo, clearReplyingTo } = useChatStore();
     const { socket } = useAuthStore();
     const typingTimeoutRef = useRef(null);
 
@@ -107,6 +108,7 @@ const MessageInput = () => {
                 text: text.trim(),
                 image: imagePreview,
                 pdf: pdfPreview,
+                replyTo: replyingTo ? replyingTo._id : null,
             });
 
             // Clear form
@@ -122,6 +124,14 @@ const MessageInput = () => {
     };
     return (
         <div className='p-4 w-full ' >
+            {/* Reply Preview */}
+            {replyingTo && (
+                <ReplyPreview 
+                    message={replyingTo} 
+                    onCancel={clearReplyingTo} 
+                />
+            )}
+            
             {imagePreview && (
                 <div className="mb-3 flex items-center gap-2">
                     <div className="relative">

@@ -6,12 +6,12 @@ import MessageSkeleton from './MessageSkeleton';
 import { useAuthStore } from '../store/useAuthStore';
 import { formatMessageTime } from '../lib/utils';
 import { useRef } from 'react';
-import { FileText, Download } from 'lucide-react';
+import { FileText, Download, Reply } from 'lucide-react';
 import EmojiPicker from './EmojiPicker';
 
 const ChatContainer = () => {
 
-  const { messages, getMessages, isMessagesLoading, selectedUser, subscribeToMessages, unSubscribeFromMessages, subscribeToTyping, unSubscribeFromTyping, isTyping, markMessagesAsRead, subscribeToReadReceipts, unSubscribeFromReadReceipts, subscribeToReactions, unSubscribeFromReactions, addReaction, removeReaction } = useChatStore();
+  const { messages, getMessages, isMessagesLoading, selectedUser, subscribeToMessages, unSubscribeFromMessages, subscribeToTyping, unSubscribeFromTyping, isTyping, markMessagesAsRead, subscribeToReadReceipts, unSubscribeFromReadReceipts, subscribeToReactions, unSubscribeFromReactions, addReaction, removeReaction, setReplyingTo } = useChatStore();
   const { authUser } = useAuthStore();
   const messagesEndRef = useRef(null);
   const [messageReactions, setMessageReactions] = useState({});
@@ -75,6 +75,11 @@ const ChatContainer = () => {
     removeReaction(messageId, emoji);
   };
 
+  // Handle reply to message
+  const handleReply = (message) => {
+    setReplyingTo(message);
+  };
+
   // Check if user has reacted with a specific emoji
   const hasUserReacted = (reactions, emoji) => {
     return reactions?.some(r => r.userId === authUser._id && r.emoji === emoji);
@@ -91,6 +96,52 @@ const ChatContainer = () => {
       grouped[r.emoji].push(r.userId);
     });
     return Object.entries(grouped).map(([emoji, users]) => ({ emoji, count: users.length, users }));
+  };
+
+  // Get the original message that is being replied to
+  const getReplyMessage = (replyToId) => {
+    return messages.find(m => m._id === replyToId);
+  };
+
+  // Render the quoted message preview
+  const renderReplyPreview = (replyToId) => {
+    const replyMessage = getReplyMessage(replyToId);
+    if (!replyMessage) return null;
+
+    // Get sender name
+    const getSenderName = () => {
+      if (replyMessage.senderId === authUser._id) return 'You';
+      if (replyMessage.senderId && replyMessage.senderId.fullName) {
+        return replyMessage.senderId.fullName;
+      }
+      return 'User';
+    };
+
+    // Get preview text
+    const getPreviewText = () => {
+      if (replyMessage.image) return '📷 Photo';
+      if (replyMessage.pdf) return '📄 Document';
+      if (replyMessage.text) {
+        return replyMessage.text.length > 30 
+          ? replyMessage.text.substring(0, 30) + '...' 
+          : replyMessage.text;
+      }
+      return 'Message';
+    };
+
+    return (
+      <div className="flex items-start gap-2 p-2 bg-base-200 rounded-lg border-l-2 border-primary mb-2 cursor-pointer" onClick={() => handleReply(replyMessage)}>
+        <Reply size={14} className="text-primary mt-0.5 flex-shrink-0" />
+        <div className="flex-1 min-w-0">
+          <p className="text-xs text-primary font-medium">
+            {getSenderName()}
+          </p>
+          <p className="text-xs text-zinc-400 truncate">
+            {getPreviewText()}
+          </p>
+        </div>
+      </div>
+    );
   };
 
   if (isMessagesLoading) {
@@ -125,6 +176,9 @@ const ChatContainer = () => {
               {message.senderId === authUser._id && renderMessageStatus(message.status)}
             </div>
             <div className="chat-bubble flex flex-col relative group">
+              {/* Reply preview if this message is a reply */}
+              {message.replyTo && renderReplyPreview(message.replyTo)}
+              
               {message.image && (
                 <img src={message.image} alt="message attachment" className="sm:max-w-[200px] rounded-md mb-2" />
               )}
@@ -145,8 +199,17 @@ const ChatContainer = () => {
               )}
               {message.text && <p>{message.text}</p>}
               
-              {/* Reaction button - visible on hover */}
-              <div className="absolute -bottom-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
+              {/* Action buttons - visible on hover */}
+              <div className="absolute -bottom-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1">
+                {/* Reply button */}
+                <button
+                  onClick={() => handleReply(message)}
+                  className="btn btn-circle btn-ghost btn-xs text-zinc-400 hover:text-primary"
+                  title="Reply"
+                >
+                  <Reply size={14} />
+                </button>
+                {/* Emoji picker */}
                 <EmojiPicker 
                   onSelect={(emoji) => handleAddReaction(message._id, emoji)} 
                 />
