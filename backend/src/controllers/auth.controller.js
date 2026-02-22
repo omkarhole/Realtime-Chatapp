@@ -2,6 +2,7 @@ import { generateToken } from "../lib/utils.js";
 import User from "../models/user.model.js";
 import bcrypt from "bcryptjs";
 import cloudinary from "../lib/cloudinary.js";
+import { sendEmail } from "../lib/email.js";
 export const signup = async (req, res) => {
     const { fullName, email, password } = req.body;
     try {
@@ -76,43 +77,106 @@ export const login = async (req, res) => {
 }
 
 export const logout = async (req, res) => {
-   try{
-    res.cookie("jwt","",{maxAge:0})
-    res.status(200).json({ message: "Logout successful" });
-   }
-   catch(err){
-       console.log("error in logout controller", err);
-       res.status(500).json({ message: "Internal server error" });
-   }
+    try {
+        res.cookie("jwt", "", { maxAge: 0 })
+        res.status(200).json({ message: "Logout successful" });
+    }
+    catch (err) {
+        console.log("error in logout controller", err);
+        res.status(500).json({ message: "Internal server error" });
+    }
 }
 
-export const updateProfile=async(req,res)=>{
-    try{
-        const {profilePic}=req.body;
-        const userId=req.user._id;
-        if(!profilePic){
-            return res.status(400).json({message:"Profile picture is required"});
+export const updateProfile = async (req, res) => {
+    try {
+        const { profilePic } = req.body;
+        const userId = req.user._id;
+        if (!profilePic) {
+            return res.status(400).json({ message: "Profile picture is required" });
         }
-        const uploadResponse=await cloudinary.uploader.upload(profilePic);
-        const updatedUser=await User.findByIdAndUpdate(userId,{
-            profilePic:uploadResponse.secure_url
-        },{new:true});
+        const uploadResponse = await cloudinary.uploader.upload(profilePic);
+        const updatedUser = await User.findByIdAndUpdate(userId, {
+            profilePic: uploadResponse.secure_url
+        }, { new: true });
 
         res.status(200).json(updatedUser);
 
     }
-    catch(err){
+    catch (err) {
         console.log("error in update profile controller", err);
         res.status(500).json({ message: "Internal server error" });
     }
 }
 
-export const checkAuth=async(req,res)=>{
-try{
-    res.status(200).json(req.user);
+export const checkAuth = async (req, res) => {
+    try {
+        res.status(200).json(req.user);
+    }
+    catch (err) {
+        console.log("error in check auth controller", err);
+        res.status(500).json({ message: "Internal server error" });
+    }
 }
-catch(err){
-    console.log("error in check auth controller", err);
-    res.status(500).json({ message: "Internal server error" });
+
+export const forgotPassword = async (req, res) => {
+    const { email } = req.body;
+    if (!email) {
+        return res.status(400).json({ message: "Email is Required" })
+    }
+    try {
+        const user = await User.findOne({ email });
+        if (!user) {
+            return res.status(404).json({ message: "User Not Found" });
+        }
+        const otp = Math.floor(100000 + Math.random() * 900000);
+        user.verifyOtp = String(otp);
+        user.verifyOtpExpairy = Date.now() + 10 * 60 * 1000;
+        await user.save();
+        const mailOption = {
+            to: email,
+            subject: "Password Reset OTP 🔐",
+            text: `Hey User, your Password Reset OTP is ${otp}. This OTP is valid for 10 minutes.\nPlease do not share it with anyone.\n\n— Team Chatty`
+        }
+        try {
+            const emailResponse = await sendEmail(mailOption);
+            console.log("Email sent successfully:", emailResponse);
+            return res.status(200).json({ message: "OTP sent to email" })
+        } catch (err) {
+            console.error("otp mailed failed", err.message);
+            return res.status(500).json({ message: "Failed to send OTP email" });
+        }
+    } catch (error) {
+        return res.status(500).json({ message: "Internal server error" });
+    }
 }
+
+export const resetPassword = async (req, res) => {
+    const { otp, password } = req.body;
+    if (!otp || !password) {
+        return res.status(400).json({ message: "OTP and new password are required" });
+    }
+    if (password.length < 6) {
+        return res.status(400).json({ message: "Password must be at least 6 characters long" });
+    }
+    try {
+        const user = await User.findOne({ verifyOtp: String(otp) });
+        if (!user) {
+            return res.status(400).json({ message: "Invalid OTP" });
+        }
+        if (user.verifyOtpExpairy < Date.now()) {
+            return res.status(400).json({ message: "OTP Expired" });
+        }
+
+        const salt = await bcrypt.genSalt(10);
+        const hashedPassword = await bcrypt.hash(password, salt);
+        user.password = hashedPassword;
+        user.verifyOtp = "";
+        user.verifyOtpExpairy = 0;
+        await user.save();
+
+        return res.status(200).json({ message: "Password reset successfully" });
+    } catch (error) {
+        console.log("error in reset password controller", error);
+        return res.status(500).json({ message: "Internal server error" });
+    }
 }
