@@ -1,6 +1,6 @@
 import express from "express";
 import { protectRoute } from "../middleware/auth.middleware.js";
-import { getMessage, getUsersForSidebar, sendMessage, markMessageAsRead, searchMessages, getAllMessages } from "../controllers/message.controller.js";
+import { getMessage, getUsersForSidebar, sendMessage, markMessageAsRead, searchMessages, getAllMessages, addReaction, removeReaction } from "../controllers/message.controller.js";
 
 
 const router=express.Router();
@@ -17,5 +17,9 @@ router.get("/:id",protectRoute,getMessage)
 router.post("/send/:id",protectRoute,sendMessage)
 
 router.put("/mark-read/:senderId",protectRoute,markMessageAsRead)
+
+// Reaction routes
+router.post("/:messageId/reactions", protectRoute, addReaction)
+router.delete("/:messageId/reactions", protectRoute, removeReaction)
 
 export default router;

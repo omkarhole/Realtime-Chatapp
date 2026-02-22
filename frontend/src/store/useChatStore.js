@@ -200,6 +200,7 @@ export const useChatStore = create((set,get) => ({
                     text: msg.text || '',
                     image: msg.image || null,
                     status: msg.status,
+                    reactions: msg.reactions || [],
                     createdAt: msg.createdAt,
                     updatedAt: msg.updatedAt
                 }))
@@ -224,6 +225,118 @@ export const useChatStore = create((set,get) => ({
             toast.dismiss();
             toast.error("Failed to export chat history");
         }
+    },
+
+    // Add reaction to a message
+    addReaction: async (messageId, emoji) => {
+        const { selectedUser, messages } = get();
+        if (!selectedUser) return;
+
+        try {
+            const res = await axiosInstance.post(`/messages/${messageId}/reactions`, { emoji });
+            
+            // Update local messages state
+            const updatedMessages = messages.map(msg => 
+                msg._id === messageId ? res.data : msg
+            );
+            set({ messages: updatedMessages });
+
+            // Emit socket event
+            const socket = useAuthStore.getState().socket;
+            if (socket) {
+                socket.emit("addReaction", { 
+                    to: selectedUser._id, 
+                    messageId, 
+                    emoji 
+                });
+            }
+        }
+        catch (err) {
+            console.log("Error adding reaction:", err);
+            toast.error("Failed to add reaction");
+        }
+    },
+
+    // Remove reaction from a message
+    removeReaction: async (messageId, emoji) => {
+        const { selectedUser, messages } = get();
+        if (!selectedUser) return;
+
+        try {
+            const res = await axiosInstance.delete(`/messages/${messageId}/reactions`, {
+                data: { emoji }
+            });
+            
+            // Update local messages state
+            const updatedMessages = messages.map(msg => 
+                msg._id === messageId ? res.data : msg
+            );
+            set({ messages: updatedMessages });
+
+            // Emit socket event
+            const socket = useAuthStore.getState().socket;
+            if (socket) {
+                socket.emit("removeReaction", { 
+                    to: selectedUser._id, 
+                    messageId, 
+                    emoji 
+                });
+            }
+        }
+        catch (err) {
+            console.log("Error removing reaction:", err);
+            toast.error("Failed to remove reaction");
+        }
+    },
+
+    // Subscribe to reaction events
+    subscribeToReactions: () => {
+        const socket = useAuthStore.getState().socket;
+        if (!socket) return;
+
+        socket.on("reactionAdded", ({ messageId, reaction }) => {
+            const { messages } = get();
+            const updatedMessages = messages.map(msg => {
+                if (msg._id === messageId) {
+                    // Check if reaction already exists
+                    const existingReaction = msg.reactions?.find(
+                        r => r.userId === reaction.userId && r.emoji === reaction.emoji
+                    );
+                    if (!existingReaction) {
+                        return {
+                            ...msg,
+                            reactions: [...(msg.reactions || []), reaction]
+                        };
+                    }
+                }
+                return msg;
+            });
+            set({ messages: updatedMessages });
+        });
+
+        socket.on("reactionRemoved", ({ messageId, reaction }) => {
+            const { messages } = get();
+            const updatedMessages = messages.map(msg => {
+                if (msg._id === messageId) {
+                    return {
+                        ...msg,
+                        reactions: (msg.reactions || []).filter(
+                            r => !(r.userId === reaction.userId && r.emoji === reaction.emoji)
+                        )
+                    };
+                }
+                return msg;
+            });
+            set({ messages: updatedMessages });
+        });
+    },
+
+    // Unsubscribe from reaction events
+    unSubscribeFromReactions: () => {
+        const socket = useAuthStore.getState().socket;
+        if (!socket) return;
+        socket.off("reactionAdded");
+        socket.off("reactionRemoved");
     },
 
 }))

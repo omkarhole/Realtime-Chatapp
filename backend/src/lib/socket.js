@@ -106,6 +106,37 @@ io.on("connection",(socket)=>{
         }
     });
 
+    // Reaction events
+    socket.on("addReaction", ({ to, messageId, emoji }) => {
+        const receiverSocketId = getReciverSocketId(to);
+        if (receiverSocketId) {
+            io.to(receiverSocketId).emit("reactionAdded", {
+                messageId,
+                reaction: {
+                    userId,
+                    emoji
+                },
+                from: userId,
+                to: to
+            });
+        }
+    });
+
+    socket.on("removeReaction", ({ to, messageId, emoji }) => {
+        const receiverSocketId = getReciverSocketId(to);
+        if (receiverSocketId) {
+            io.to(receiverSocketId).emit("reactionRemoved", {
+                messageId,
+                reaction: {
+                    userId,
+                    emoji
+                },
+                from: userId,
+                to: to
+            });
+        }
+    });
+
 });
 
  
