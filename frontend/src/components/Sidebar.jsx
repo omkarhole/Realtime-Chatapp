@@ -4,6 +4,7 @@ import SidebarSkeleton from "./SidebarSkeleton";
 import { Users, Search, X } from "lucide-react";
 import { useAuthStore } from "../store/useAuthStore";
 import SearchResults from "./SearchResults";
+import { formatLastSeen } from "../lib/utils";
 
 const Sidebar = () => {
   const { getUsers, users, selectedUser, setSelectedUser, isUserLoading, searchMessages, searchResults, isSearchLoading, clearSearch, isSearchOpen } = useChatStore();
@@ -116,7 +117,7 @@ const Sidebar = () => {
               <div className="hidden lg:block text-left min-w-0">
                 <div className="font-medium truncate">{user.fullName}</div>
                 <div className="text-sm text-zinc-400">
-                  {onlineUsers.includes(user._id) ? "Online" : "Offline"}
+                  {onlineUsers.includes(user._id) ? "Online" : formatLastSeen(user.lastSeen)}
                 </div>
               </div>
             </div>

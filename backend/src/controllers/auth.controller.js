@@ -22,7 +22,8 @@ export const signup = async (req, res) => {
         const newUser = new User({
             fullName,
             email,
-            password: hashedPassword
+            password: hashedPassword,
+            lastSeen: new Date()
         })
         if (newUser) {
             generateToken(newUser.id, res)
@@ -32,6 +33,7 @@ export const signup = async (req, res) => {
                 fullName: newUser.fullName,
                 email: newUser.email,
                 profilePic: newUser.profilePic,
+                lastSeen: newUser.lastSeen,
                 message: "User created successfully"
             })
         }
@@ -59,11 +61,16 @@ export const login = async (req, res) => {
 
         generateToken(user.id, res)
 
+        // Update last seen on login
+        user.lastSeen = new Date();
+        await user.save();
+
         res.status(200).json({
             _id: user._id,
             fullName: user.fullName,
             email: user.email,
             profilePic: user.profilePic,
+            lastSeen: user.lastSeen,
             message: "Login successful"
 
         })
@@ -77,6 +84,11 @@ export const login = async (req, res) => {
 
 export const logout = async (req, res) => {
    try{
+    // Update last seen on logout
+    if (req.user) {
+        req.user.lastSeen = new Date();
+        await req.user.save();
+    }
     res.cookie("jwt","",{maxAge:0})
     res.status(200).json({ message: "Logout successful" });
    }
