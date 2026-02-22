@@ -74,7 +74,7 @@ const Sidebar = () => {
             />
             <span className="text-sm">Show online only</span>
           </label>
-          <span className="text-xs text-zinc-500">({onlineUsers.length - 1} online)</span>
+          <span className="text-xs text-zinc-500">({Math.max(0, onlineUsers.length - 1)} online)</span>
         </div>
       </div>
       
@@ -112,13 +112,13 @@ const Sidebar = () => {
                   rounded-full ring-2 ring-zinc-900"
                 />
               )}
+            </div>
 
-              {/* User info - only visible on larger screens */}
-              <div className="hidden lg:block text-left min-w-0">
-                <div className="font-medium truncate">{user.fullName}</div>
-                <div className="text-sm text-zinc-400">
-                  {onlineUsers.includes(user._id) ? "Online" : formatLastSeen(user.lastSeen)}
-                </div>
+            {/* User info - only visible on larger screens */}
+            <div className="hidden lg:block text-left min-w-0">
+              <div className="font-medium truncate">{user.fullName}</div>
+              <div className="text-sm text-zinc-400">
+                {onlineUsers.includes(user._id) ? "Online" : formatLastSeen(user.lastSeen)}
               </div>
             </div>
 
