@@ -5,19 +5,19 @@ import AuthImagePattern from "../components/AuthImagePattern";
 import { Link } from "react-router-dom";
 
 const LoginPage = () => {
-  const[showPassword,setShowPassword]=useState(false);
-  const[formData,setFormData]=useState({
-    email:"",
-    password:"",
+  const [showPassword, setShowPassword] = useState(false);
+  const [formData, setFormData] = useState({
+    email: "",
+    password: "",
   });
-  const {login,isLoggingIn  }=useAuthStore();
+  const { login, isLoggingIn } = useAuthStore();
 
-  const handleSubmit=async(e)=>{
-e.preventDefault();
-login(formData);
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    login(formData);
   }
   return (
- <div className="h-screen grid lg:grid-cols-2">
+    <div className="h-screen grid lg:grid-cols-2">
       {/* Left Side - Form */}
       <div className="flex flex-col justify-center items-center p-6 sm:p-12">
         <div className="w-full max-w-md space-y-8">
@@ -81,6 +81,11 @@ login(formData);
                     <Eye className="h-5 w-5 text-base-content/40" />
                   )}
                 </button>
+              </div>
+              <div className="flex justify-end mt-1">
+                <Link to="/forgot-password" title="Forgot Password?" className="text-sm link link-primary">
+                  Forgot Password?
+                </Link>
               </div>
             </div>
 
