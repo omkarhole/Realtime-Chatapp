@@ -63,6 +63,11 @@ io.on("connection",(socket)=>{
     const userId = socket.user?._id || socket.handshake.query.userId;
     if(userId){
         userSocketMap[userId]=socket.id;
+        
+        // Update last seen on connect
+        User.findByIdAndUpdate(userId, { lastSeen: new Date() }).catch(err => {
+            console.log("Error updating lastSeen on connect:", err);
+        });
     }
     // io.emit() is used to send event to all connected clients
     io.emit("getOnlineUsers",Object.keys(userSocketMap));
@@ -70,8 +75,25 @@ io.on("connection",(socket)=>{
     socket.on("disconnect",()=>{
         console.log("user disconnected",socket.id);
         delete userSocketMap[userId];
-            io.emit("getOnlineUsers",Object.keys(userSocketMap));
+        
+        // Update last seen on disconnect
+        if (userId) {
+            User.findByIdAndUpdate(userId, { lastSeen: new Date() }).catch(err => {
+                console.log("Error updating lastSeen on disconnect:", err);
+            });
+        }
+        
+        io.emit("getOnlineUsers",Object.keys(userSocketMap));
     })
+
+    // Update last seen on activity (typing, messaging, etc.)
+    socket.on("activity", () => {
+        if (userId) {
+            User.findByIdAndUpdate(userId, { lastSeen: new Date() }).catch(err => {
+                console.log("Error updating lastSeen on activity:", err);
+            });
+        }
+    });
 
     // Typing events
     socket.on("typing", ({ to }) => {

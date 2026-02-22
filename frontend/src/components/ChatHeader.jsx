@@ -1,6 +1,8 @@
 import { useChatStore } from "../store/useChatStore"
 import { useAuthStore } from "../store/useAuthStore"
 import { X, Download } from "lucide-react";
+import { formatLastSeen } from "../lib/utils";
+
 const ChatHeader = () => {
 
     const { selectedUser, setSelectedUser, exportChatHistory } = useChatStore();
@@ -19,7 +21,7 @@ const ChatHeader = () => {
                     <div>
                         <h3 className="font-medium">{selectedUser.fullName}</h3>
                         <p className="text-sm text-base-content/70">
-                            {onlineUsers.includes(selectedUser._id) ? "Online" : "Offline"}
+                            {onlineUsers.includes(selectedUser._id) ? "Online" : formatLastSeen(selectedUser.lastSeen)}
                         </p>
                     </div>
                 </div>
