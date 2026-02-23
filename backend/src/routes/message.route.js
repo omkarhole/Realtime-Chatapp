@@ -1,6 +1,6 @@
 import express from "express";
 import { protectRoute } from "../middleware/auth.middleware.js";
-import { getMessage, getUsersForSidebar, sendMessage, markMessageAsRead, searchMessages, getAllMessages, addReaction, removeReaction } from "../controllers/message.controller.js";
+import { getMessage, getUsersForSidebar, sendMessage, markMessageAsRead, searchMessages, getAllMessages, addReaction, removeReaction, deleteMessage } from "../controllers/message.controller.js";
 
 
 const router=express.Router();
@@ -17,6 +17,9 @@ router.get("/:id",protectRoute,getMessage)
 router.post("/send/:id",protectRoute,sendMessage)
 
 router.put("/mark-read/:senderId",protectRoute,markMessageAsRead)
+
+// Delete message for everyone
+router.delete("/:messageId",protectRoute, deleteMessage)
 
 // Reaction routes
 router.post("/:messageId/reactions", protectRoute, addReaction)

@@ -331,3 +331,74 @@ export const removeReaction = async (req, res) => {
         res.status(500).json({ message: "Internal Server Error" })
     }
 }
+
+// Delete message for everyone
+export const deleteMessage = async (req, res) => {
+    try {
+        const { messageId } = req.params;
+        const userId = req.user._id;
+
+        const message = await Message.findById(messageId);
+        
+        if (!message) {
+            return res.status(404).json({ message: "Message not found" });
+        }
+
+        // Check if user is the sender
+        if (message.senderId.toString() !== userId.toString()) {
+            return res.status(403).json({ message: "You can only delete your own messages" });
+        }
+
+        // Check if 24 hours have passed since message creation
+        const messageAge = Date.now() - message.createdAt.getTime();
+        const twentyFourHours = 24 * 60 * 60 * 1000; // 24 hours in milliseconds
+        
+        if (messageAge > twentyFourHours) {
+            return res.status(400).json({ message: "You can only delete messages within 24 hours" });
+        }
+
+        // Check if already deleted for everyone (both sender and receiver)
+        const senderDeleted = message.deletedFor.some(id => id.toString() === userId.toString());
+        const receiverDeleted = message.deletedFor.some(id => id.toString() === message.receiverId.toString());
+
+        if (senderDeleted && receiverDeleted) {
+            return res.status(400).json({ message: "Message already deleted for everyone" });
+        }
+
+        // Add both sender and receiver to deletedFor array (soft delete for both)
+        if (!senderDeleted) {
+            message.deletedFor.push(userId);
+        }
+        if (!receiverDeleted) {
+            message.deletedFor.push(message.receiverId);
+        }
+
+        await message.save();
+
+        // Notify both users via socket
+        const senderSocketId = getReciverSocketId(message.senderId);
+        const receiverSocketId = getReciverSocketId(message.receiverId);
+
+        const deletionData = {
+            messageId,
+            deletedFor: message.deletedFor
+        };
+
+        if (senderSocketId) {
+            io.to(senderSocketId).emit("messageDeleted", deletionData);
+        }
+        if (receiverSocketId) {
+            io.to(receiverSocketId).emit("messageDeleted", deletionData);
+        }
+
+        res.status(200).json({ 
+            message: "Message deleted for everyone",
+            deletedFor: message.deletedFor
+        });
+
+    }
+    catch (err) {
+        console.error("Error deleting message:", err);
+        res.status(500).json({ message: "Internal Server Error" })
+    }
+}
