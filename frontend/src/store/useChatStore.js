@@ -350,4 +350,53 @@ export const useChatStore = create((set,get) => ({
         socket.off("reactionRemoved");
     },
 
+    // Delete message for everyone
+    deleteMessage: async (messageId) => {
+        const { messages } = get();
+        
+        try {
+            const res = await axiosInstance.delete(`/messages/${messageId}`);
+            
+            // Update local messages state with deletedFor array
+            const updatedMessages = messages.map(msg => 
+                msg._id === messageId ? { ...msg, deletedFor: res.data.deletedFor } : msg
+            );
+            set({ messages: updatedMessages });
+            
+            toast.success("Message deleted for everyone");
+        }
+        catch (err) {
+            console.log("Error deleting message:", err);
+            const errorMessage = err.response?.data?.message || "Failed to delete message";
+            toast.error(errorMessage);
+        }
+    },
+
+    // Subscribe to message deletion events
+    subscribeToDeletedMessages: () => {
+        const socket = useAuthStore.getState().socket;
+        if (!socket) return;
+
+        socket.on("messageDeleted", ({ messageId, deletedFor }) => {
+            const { messages } = get();
+            const updatedMessages = messages.map(msg => {
+                if (msg._id === messageId) {
+                    return {
+                        ...msg,
+                        deletedFor: deletedFor
+                    };
+                }
+                return msg;
+            });
+            set({ messages: updatedMessages });
+        });
+    },
+
+    // Unsubscribe from message deletion events
+    unSubscribeFromDeletedMessages: () => {
+        const socket = useAuthStore.getState().socket;
+        if (!socket) return;
+        socket.off("messageDeleted");
+    },
+
 }))

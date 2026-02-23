@@ -5,12 +5,12 @@ import MessageInput from './MessageInput';
 import MessageSkeleton from './MessageSkeleton';
 import { useAuthStore } from '../store/useAuthStore';
 import { formatMessageTime } from '../lib/utils';
-import { FileText, Download, Reply, Play, Pause } from 'lucide-react';
+import { FileText, Download, Reply, Play, Pause, Trash2 } from 'lucide-react';
 import EmojiPicker from './EmojiPicker';
 
 const ChatContainer = () => {
 
-  const { messages, getMessages, isMessagesLoading, selectedUser, subscribeToMessages, unSubscribeFromMessages, subscribeToTyping, unSubscribeFromTyping, isTyping, markMessagesAsRead, subscribeToReadReceipts, unSubscribeFromReadReceipts, subscribeToReactions, unSubscribeFromReactions, addReaction, removeReaction, setReplyingTo } = useChatStore();
+  const { messages, getMessages, isMessagesLoading, selectedUser, subscribeToMessages, unSubscribeFromMessages, subscribeToTyping, unSubscribeFromTyping, isTyping, markMessagesAsRead, subscribeToReadReceipts, unSubscribeFromReadReceipts, subscribeToReactions, unSubscribeFromReactions, addReaction, removeReaction, setReplyingTo, deleteMessage, subscribeToDeletedMessages, unSubscribeFromDeletedMessages } = useChatStore();
   const { authUser } = useAuthStore();
   const messagesEndRef = useRef(null);
   const [messageReactions, setMessageReactions] = useState({});
@@ -24,13 +24,15 @@ const ChatContainer = () => {
     subscribeToTyping();
     subscribeToReadReceipts();
     subscribeToReactions();
+    subscribeToDeletedMessages();
     return () => {
       unSubscribeFromMessages();
       unSubscribeFromTyping();
       unSubscribeFromReadReceipts();
       unSubscribeFromReactions();
+      unSubscribeFromDeletedMessages();
     };
-  }, [selectedUser._id, getMessages, subscribeToMessages, unSubscribeFromMessages, subscribeToTyping, unSubscribeFromTyping, subscribeToReadReceipts, unSubscribeFromReadReceipts, subscribeToReactions, unSubscribeFromReactions]);
+  }, [selectedUser._id, getMessages, subscribeToMessages, unSubscribeFromMessages, subscribeToTyping, unSubscribeFromTyping, subscribeToReadReceipts, unSubscribeFromReadReceipts, subscribeToReactions, unSubscribeFromReactions, subscribeToDeletedMessages, unSubscribeFromDeletedMessages]);
 
   // Mark messages as read when user opens chat
   useEffect(() => {
@@ -116,6 +118,17 @@ const ChatContainer = () => {
   // Handle reply to message
   const handleReply = (message) => {
     setReplyingTo(message);
+  };
+
+  // Handle delete message
+  const handleDeleteMessage = (messageId) => {
+    deleteMessage(messageId);
+  };
+
+  // Check if message is deleted for the current user
+  const isMessageDeleted = (message) => {
+    if (!message.deletedFor) return false;
+    return message.deletedFor.some(id => id === authUser._id || id === authUser._id.toString());
   };
 
   // Check if user has reacted with a specific emoji
@@ -277,23 +290,40 @@ const ChatContainer = () => {
               )}
               {/* Audio player */}
               {message.audio && renderAudioPlayer(message)}
-              {message.text && <p>{message.text}</p>}
+              {message.text && !isMessageDeleted(message) && <p>{message.text}</p>}
               
-              {/* Action buttons - visible on hover */}
-              <div className="absolute -bottom-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1">
-                {/* Reply button */}
-                <button
-                  onClick={() => handleReply(message)}
-                  className="btn btn-circle btn-ghost btn-xs text-zinc-400 hover:text-primary"
-                  title="Reply"
-                >
-                  <Reply size={14} />
-                </button>
-                {/* Emoji picker */}
-                <EmojiPicker 
-                  onSelect={(emoji) => handleAddReaction(message._id, emoji)} 
-                />
-              </div>
+              {/* Show "This message was deleted" placeholder for deleted messages */}
+              {isMessageDeleted(message) && (
+                <p className="text-sm text-zinc-400 italic">This message was deleted</p>
+              )}
+              
+              {/* Action buttons - visible on hover - only show if message is not deleted */}
+              {!isMessageDeleted(message) && (
+                <div className="absolute -bottom-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1">
+                  {/* Delete button - only visible for sender */}
+                  {message.senderId === authUser._id && (
+                    <button
+                      onClick={() => handleDeleteMessage(message._id)}
+                      className="btn btn-circle btn-ghost btn-xs text-zinc-400 hover:text-red-500"
+                      title="Delete for everyone"
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  )}
+                  {/* Reply button */}
+                  <button
+                    onClick={() => handleReply(message)}
+                    className="btn btn-circle btn-ghost btn-xs text-zinc-400 hover:text-primary"
+                    title="Reply"
+                  >
+                    <Reply size={14} />
+                  </button>
+                  {/* Emoji picker */}
+                  <EmojiPicker 
+                    onSelect={(emoji) => handleAddReaction(message._id, emoji)} 
+                  />
+                </div>
+              )}
             </div>
             
             {/* Reactions display */}
