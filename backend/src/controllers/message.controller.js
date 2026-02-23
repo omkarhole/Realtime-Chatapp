@@ -43,12 +43,13 @@ export const getMessage = async (req, res) => {
 
 export const sendMessage = async (req, res) => {
     try {
-        const { text, image, pdf, replyTo } = req.body;
+        const { text, image, pdf, audio, audioDuration, replyTo } = req.body;
         const { id: receiverId } = req.params;
         const senderId = req.user._id;
 
         let imageUrl;
         let pdfUrl;
+        let audioUrl;
 
         //if image exists upload image to cloudinary and get the url
         if (image) {
@@ -64,12 +65,22 @@ export const sendMessage = async (req, res) => {
             pdfUrl = uploadResponse.secure_url;
         }
 
+        //if audio exists upload audio to cloudinary and get the url
+        if (audio) {
+            const uploadResponse = await cloudinary.uploader.upload(audio, {
+                resource_type: "video"
+            });
+            audioUrl = uploadResponse.secure_url;
+        }
+
         const newMessage = new Message({
             senderId,
             receiverId,
             text,
             image: imageUrl,
             pdf: pdfUrl,
+            audio: audioUrl,
+            audioDuration: audioDuration || 0,
             replyTo: replyTo || null
         });
         await newMessage.save();
