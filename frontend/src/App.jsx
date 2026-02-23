@@ -12,16 +12,27 @@ import { useEffect } from "react";
 import { Loader } from "lucide-react"
 import { Toaster } from "react-hot-toast";
 import { useThemeStore } from "./store/useThemeStore";
+import { useChatStore } from "./store/useChatStore";
+
 const App = () => {
-  const { authUser, checkAuth, isCheckingAuth, onlineUsers } = useAuthStore();
+  const { authUser, checkAuth, isCheckingAuth, socket } = useAuthStore();
   const { theme } = useThemeStore();
+  const { subscribeToMessages, unSubscribeFromMessages, getUsers } = useChatStore();
 
   useEffect(() => {
     checkAuth();
   }, [checkAuth])
 
-  console.log("onlineUsers in App.jsx", onlineUsers);
-  console.log("authUser in App.jsx", authUser);
+  useEffect(() => {
+    if (!authUser || !socket) return;
+    subscribeToMessages();
+    getUsers("", { silent: true });
+
+    return () => {
+      unSubscribeFromMessages();
+    };
+  }, [authUser, socket, subscribeToMessages, unSubscribeFromMessages, getUsers]);
+
   if (isCheckingAuth && !authUser) {
     return (
       <div className="flex items-center justify-center h-screen">
@@ -35,7 +46,7 @@ const App = () => {
       <Navbar />
       <Routes>
         <Route path='/' element={authUser ? <HomePage /> : <Navigate to="/login" />} />
-        <Route path='/signup' element={!authUser ? <SignUpPage /> : <Navigate to="/login" />} />
+        <Route path='/signup' element={!authUser ? <SignUpPage /> : <Navigate to="/" />} />
         <Route path='/login' element={!authUser ? <LoginPage /> : <Navigate to="/" />} />
         <Route path='/forgot-password' element={!authUser ? <ForgotPasswordPage /> : <Navigate to="/" />} />
         <Route path='/reset-password' element={!authUser ? <ResetPasswordPage /> : <Navigate to="/" />} />

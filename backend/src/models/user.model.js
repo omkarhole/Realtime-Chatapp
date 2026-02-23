@@ -2,14 +2,26 @@ import mongoose from "mongoose";
 
 
 const userSchema = new mongoose.Schema({
+    username: {
+        type: String,
+        trim: true,
+        lowercase: true,
+        unique: true,
+        sparse: true,
+        minlength: 3,
+        maxlength: 30
+    },
     email: {
         type: String,
         required: true,
-        unique: true
+        unique: true,
+        lowercase: true,
+        trim: true
     },
     fullName: {
         type: String,
         required: true,
+        trim: true
     },
     password: {
         type: String,
@@ -27,6 +39,10 @@ const userSchema = new mongoose.Schema({
     verifyOtpExpairy: {
         type: Number,
         default: 0,
+    },
+    lastSeen: {
+        type: Date,
+        default: Date.now
     }
 },
     {

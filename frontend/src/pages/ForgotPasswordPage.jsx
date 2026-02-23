@@ -2,15 +2,29 @@ import { useState } from "react";
 import { Mail, MessageSquare, ArrowLeft } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import AuthImagePattern from "../components/AuthImagePattern";
+import { axiosInstance } from "../lib/axios";
+import toast from "react-hot-toast";
 
 const ForgotPasswordPage = () => {
     const [email, setEmail] = useState("");
+    const [isSubmitting, setIsSubmitting] = useState(false);
     const navigate = useNavigate();
 
-    const handleSubmit = (e) => {
+    const handleSubmit = async (e) => {
         e.preventDefault();
-        console.log("Sending recovery email to:", email);
-        navigate("/reset-password");
+        const normalizedEmail = email.trim().toLowerCase();
+        if (!normalizedEmail) return;
+
+        setIsSubmitting(true);
+        try {
+            await axiosInstance.post("/auth/forgot-password", { email: normalizedEmail });
+            toast.success("OTP sent to your email");
+            navigate("/reset-password");
+        } catch (err) {
+            toast.error(err?.response?.data?.message || "Failed to send OTP");
+        } finally {
+            setIsSubmitting(false);
+        }
     };
 
     return (
@@ -51,7 +65,7 @@ const ForgotPasswordPage = () => {
                             </div>
                         </div>
 
-                        <button type="submit" className="btn btn-primary w-full">
+                        <button type="submit" className="btn btn-primary w-full" disabled={isSubmitting}>
                             Send OTP
                         </button>
                     </form>
