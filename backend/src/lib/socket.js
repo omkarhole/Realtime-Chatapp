@@ -159,6 +159,37 @@ io.on("connection",(socket)=>{
         }
     });
 
+    // Group typing events
+    socket.on("groupTyping", ({ groupId, members }) => {
+        members.forEach(memberId => {
+            if (memberId !== userId.toString()) {
+                const memberSocketId = getReciverSocketId(memberId);
+                if (memberSocketId) {
+                    io.to(memberSocketId).emit("groupTyping", {
+                        groupId,
+                        userId,
+                        from: userId
+                    });
+                }
+            }
+        });
+    });
+
+    socket.on("groupStopTyping", ({ groupId, members }) => {
+        members.forEach(memberId => {
+            if (memberId !== userId.toString()) {
+                const memberSocketId = getReciverSocketId(memberId);
+                if (memberSocketId) {
+                    io.to(memberSocketId).emit("groupStopTyping", {
+                        groupId,
+                        userId,
+                        from: userId
+                    });
+                }
+            }
+        });
+    });
+
 });
 
  

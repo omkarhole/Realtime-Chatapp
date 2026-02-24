@@ -10,7 +10,35 @@ import EmojiPicker from './EmojiPicker';
 
 const ChatContainer = () => {
 
-  const { messages, getMessages, isMessagesLoading, selectedUser, subscribeToMessages, unSubscribeFromMessages, subscribeToTyping, unSubscribeFromTyping, isTyping, markMessagesAsRead, subscribeToReadReceipts, unSubscribeFromReadReceipts, subscribeToReactions, unSubscribeFromReactions, addReaction, removeReaction, setReplyingTo, deleteMessage, subscribeToDeletedMessages, unSubscribeFromDeletedMessages } = useChatStore();
+  const { 
+    messages, 
+    getMessages, 
+    isMessagesLoading, 
+    selectedUser, 
+    selectedGroup,
+    subscribeToMessages, 
+    unSubscribeFromMessages, 
+    subscribeToTyping, 
+    unSubscribeFromTyping, 
+    isTyping, 
+    markMessagesAsRead, 
+    subscribeToReadReceipts, 
+    unSubscribeFromReadReceipts, 
+    subscribeToReactions, 
+    unSubscribeFromReactions, 
+    addReaction, 
+    removeReaction, 
+    setReplyingTo, 
+    deleteMessage, 
+    subscribeToDeletedMessages, 
+    unSubscribeFromDeletedMessages,
+    getGroupMessages,
+    subscribeToGroupMessages,
+    unSubscribeFromGroupMessages,
+    subscribeToGroupTyping,
+    unSubscribeFromGroupTyping,
+    groupTypingUsers
+  } = useChatStore();
   const { authUser } = useAuthStore();
   const messagesEndRef = useRef(null);
   const [messageReactions, setMessageReactions] = useState({});
@@ -18,28 +46,42 @@ const ChatContainer = () => {
   const [audioProgress, setAudioProgress] = useState({});
   const audioRefs = useRef({});
 
+  const isGroup = !!selectedGroup;
+
   useEffect(() => {
-    getMessages(selectedUser._id);
-    subscribeToMessages();
-    subscribeToTyping();
-    subscribeToReadReceipts();
+    if (isGroup) {
+      getGroupMessages(selectedGroup._id);
+      subscribeToGroupMessages();
+      subscribeToGroupTyping();
+    } else {
+      getMessages(selectedUser._id);
+      subscribeToMessages();
+      subscribeToTyping();
+      subscribeToReadReceipts();
+    }
     subscribeToReactions();
     subscribeToDeletedMessages();
+    
     return () => {
-      unSubscribeFromMessages();
-      unSubscribeFromTyping();
-      unSubscribeFromReadReceipts();
+      if (isGroup) {
+        unSubscribeFromGroupMessages();
+        unSubscribeFromGroupTyping();
+      } else {
+        unSubscribeFromMessages();
+        unSubscribeFromTyping();
+        unSubscribeFromReadReceipts();
+      }
       unSubscribeFromReactions();
       unSubscribeFromDeletedMessages();
     };
-  }, [selectedUser._id, getMessages, subscribeToMessages, unSubscribeFromMessages, subscribeToTyping, unSubscribeFromTyping, subscribeToReadReceipts, unSubscribeFromReadReceipts, subscribeToReactions, unSubscribeFromReactions, subscribeToDeletedMessages, unSubscribeFromDeletedMessages]);
+  }, [isGroup ? selectedGroup?._id : selectedUser?._id]);
 
-  // Mark messages as read when user opens chat
+  // Mark messages as read when user opens chat (only for individual chats)
   useEffect(() => {
-    if (selectedUser && messages.length > 0) {
+    if (selectedUser && messages.length > 0 && !isGroup) {
       markMessagesAsRead(selectedUser._id);
     }
-  }, [messages, selectedUser, markMessagesAsRead]);
+  }, [messages, selectedUser, markMessagesAsRead, isGroup]);
 
   useEffect(() => {
     if (messagesEndRef.current && messages) {
@@ -47,18 +89,40 @@ const ChatContainer = () => {
     }
   }, [messages])
 
-  const isUserTyping = selectedUser && isTyping(selectedUser._id);
+  // Typing indicator - different for group vs individual
+  const isUserTyping = isGroup 
+    ? groupTypingUsers.length > 0
+    : selectedUser && isTyping(selectedUser._id);
+
+  // Get sender name for group messages
+  const getSenderName = (message) => {
+    if (!isGroup) return null;
+    if (message.senderId === authUser._id) return 'You';
+    if (message.senderId && message.senderId.fullName) {
+      return message.senderId.fullName;
+    }
+    return 'Unknown';
+  };
+
+  // Get sender avatar for group messages
+  const getSenderAvatar = (message) => {
+    if (message.senderId === authUser._id) {
+      return authUser.profilePic || '/avatar.png';
+    }
+    if (message.senderId && message.senderId.profilePic) {
+      return message.senderId.profilePic;
+    }
+    return '/avatar.png';
+  };
 
   // Audio playback functions
   const toggleAudioPlayback = (messageId, audioUrl) => {
     if (playingAudioId === messageId) {
-      // Pause
       if (audioRefs.current[messageId]) {
         audioRefs.current[messageId].pause();
       }
       setPlayingAudioId(null);
     } else {
-      // Play
       if (audioRefs.current[messageId]) {
         audioRefs.current[messageId].play();
         setPlayingAudioId(messageId);
@@ -86,8 +150,9 @@ const ChatContainer = () => {
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
 
-  // Function to render message status indicator
+  // Function to render message status indicator (only for individual chats)
   const renderMessageStatus = (status) => {
+    if (isGroup) return null;
     if (status === 'read') {
       return <span className="text-blue-500 ml-1">✓✓</span>;
     } else if (status === 'delivered') {
@@ -159,7 +224,7 @@ const ChatContainer = () => {
     const replyMessage = getReplyMessage(replyToId);
     if (!replyMessage) return null;
 
-    const getSenderName = () => {
+    const getReplySenderName = () => {
       if (replyMessage.senderId === authUser._id) return 'You';
       if (replyMessage.senderId && replyMessage.senderId.fullName) {
         return replyMessage.senderId.fullName;
@@ -184,7 +249,7 @@ const ChatContainer = () => {
         <Reply size={14} className="text-primary mt-0.5 flex-shrink-0" />
         <div className="flex-1 min-w-0">
           <p className="text-xs text-primary font-medium">
-            {getSenderName()}
+            {getReplySenderName()}
           </p>
           <p className="text-xs text-zinc-400 truncate">
             {getPreviewText()}
@@ -209,7 +274,6 @@ const ChatContainer = () => {
           {isPlaying ? <Pause size={18} /> : <Play size={18} />}
         </button>
         <div className="flex-1">
-          {/* Progress bar */}
           <div className="w-full h-1.5 bg-zinc-600 rounded-full mb-1">
             <div 
               className="h-full bg-primary rounded-full transition-all"
@@ -243,123 +307,130 @@ const ChatContainer = () => {
     </div>
   }
 
+  // Get contact for avatar display
+  const getContactAvatar = () => {
+    if (isGroup) {
+      return selectedGroup?.avatar || '/avatar.png';
+    }
+    return selectedUser?.profilePic || '/avatar.png';
+  };
+
   return (
     <div className="flex-1 flex flex-col overflow-auto">
       <ChatHeader />
 
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
-        {messages.map((message) => (
-          <div
-            key={message._id}
-            className={`chat ${message.senderId === authUser._id ? 'chat-end' : 'chat-start'}`}
-            ref={messagesEndRef}
-          >
-            <div className='chat-image avatar'>
-              <div className='size-10 rounded-full border'>
-                <img src={message.senderId == authUser._id ? authUser.profilePic || '/avatar.png' :
-                  selectedUser.profilePic || "/avatar.png"} alt="profile Pic" />
+        {messages.map((message) => {
+          const senderId = message.senderId?._id || message.senderId;
+          const isOwnMessage = senderId === authUser._id || senderId === authUser._id.toString();
+          
+          return (
+            <div
+              key={message._id}
+              className={`chat ${isOwnMessage ? 'chat-end' : 'chat-start'}`}
+              ref={messagesEndRef}
+            >
+              <div className='chat-image avatar'>
+                <div className='size-10 rounded-full border'>
+                  <img src={isOwnMessage ? authUser.profilePic || '/avatar.png' : getSenderAvatar(message)} alt="profile Pic" />
+                </div>
               </div>
-            </div>
-            <div className='chat-header mb-1 flex items-center'>
-              <time className='text-xs opacity-50 ml-1'>
-                {formatMessageTime(message.createdAt)}
-              </time>
-              {message.senderId === authUser._id && renderMessageStatus(message.status)}
-            </div>
-            <div className="chat-bubble flex flex-col relative group">
-              {/* Reply preview if this message is a reply */}
-              {message.replyTo && renderReplyPreview(message.replyTo)}
-              
-              {message.image && (
-                <img src={message.image} alt="message attachment" className="sm:max-w-[200px] rounded-md mb-2" />
-              )}
-              {message.pdf && (
-                <a 
-                  href={message.pdf} 
-                  target="_blank" 
-                  rel="noopener noreferrer"
-                  className="flex items-center gap-2 p-2 rounded-lg border border-zinc-600 hover:bg-zinc-700 transition-colors mb-2 max-w-[200px]"
-                >
-                  <FileText size={24} className="text-red-500 flex-shrink-0" />
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm text-zinc-200 truncate">{getFileName(message.pdf)}</p>
-                    <p className="text-xs text-zinc-400">Document</p>
-                  </div>
-                  <Download size={16} className="text-zinc-400 flex-shrink-0" />
-                </a>
-              )}
-              {/* Audio player */}
-              {message.audio && renderAudioPlayer(message)}
-              {message.text && !isMessageDeleted(message) && <p>{message.text}</p>}
-              
-              {/* Show "This message was deleted" placeholder for deleted messages */}
-              {isMessageDeleted(message) && (
-                <p className="text-sm text-zinc-400 italic">This message was deleted</p>
-              )}
-              
-              {/* Action buttons - visible on hover - only show if message is not deleted */}
-              {!isMessageDeleted(message) && (
-                <div className="absolute -bottom-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1">
-                  {/* Delete button - only visible for sender */}
-                  {message.senderId === authUser._id && (
-                    <button
-                      onClick={() => handleDeleteMessage(message._id)}
-                      className="btn btn-circle btn-ghost btn-xs text-zinc-400 hover:text-red-500"
-                      title="Delete for everyone"
-                    >
-                      <Trash2 size={14} />
-                    </button>
-                  )}
-                  {/* Reply button */}
-                  <button
-                    onClick={() => handleReply(message)}
-                    className="btn btn-circle btn-ghost btn-xs text-zinc-400 hover:text-primary"
-                    title="Reply"
+              <div className='chat-header mb-1 flex items-center gap-2'>
+                {!isGroup && <time className='text-xs opacity-50'>{formatMessageTime(message.createdAt)}</time>}
+                {isGroup && !isOwnMessage && (
+                  <span className="text-xs font-medium text-primary">{getSenderName(message)}</span>
+                )}
+                {isGroup && <time className='text-xs opacity-50'>{formatMessageTime(message.createdAt)}</time>}
+                {!isGroup && isOwnMessage && renderMessageStatus(message.status)}
+              </div>
+              <div className="chat-bubble flex flex-col relative group">
+                {/* Reply preview if this message is a reply */}
+                {message.replyTo && renderReplyPreview(message.replyTo)}
+                
+                {message.image && (
+                  <img src={message.image} alt="message attachment" className="sm:max-w-[200px] rounded-md mb-2" />
+                )}
+                {message.pdf && (
+                  <a 
+                    href={message.pdf} 
+                    target="_blank" 
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-2 p-2 rounded-lg border border-zinc-600 hover:bg-zinc-700 transition-colors mb-2 max-w-[200px]"
                   >
-                    <Reply size={14} />
-                  </button>
-                  {/* Emoji picker */}
-                  <EmojiPicker 
-                    onSelect={(emoji) => handleAddReaction(message._id, emoji)} 
-                  />
+                    <FileText size={24} className="text-red-500 flex-shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm text-zinc-200 truncate">{getFileName(message.pdf)}</p>
+                      <p className="text-xs text-zinc-400">Document</p>
+                    </div>
+                    <Download size={16} className="text-zinc-400 flex-shrink-0" />
+                  </a>
+                )}
+                {message.audio && renderAudioPlayer(message)}
+                {message.text && !isMessageDeleted(message) && <p>{message.text}</p>}
+                
+                {isMessageDeleted(message) && (
+                  <p className="text-sm text-zinc-400 italic">This message was deleted</p>
+                )}
+              
+                {!isMessageDeleted(message) && (
+                  <div className="absolute -bottom-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1">
+                    {isOwnMessage && (
+                      <button
+                        onClick={() => handleDeleteMessage(message._id)}
+                        className="btn btn-circle btn-ghost btn-xs text-zinc-400 hover:text-red-500"
+                        title="Delete for everyone"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    )}
+                    <button
+                      onClick={() => handleReply(message)}
+                      className="btn btn-circle btn-ghost btn-xs text-zinc-400 hover:text-primary"
+                      title="Reply"
+                    >
+                      <Reply size={14} />
+                    </button>
+                    <EmojiPicker 
+                      onSelect={(emoji) => handleAddReaction(message._id, emoji)} 
+                    />
+                  </div>
+                )}
+              </div>
+            
+              {message.reactions && message.reactions.length > 0 && (
+                <div className="flex items-center gap-1 mt-1 flex-wrap">
+                  {groupReactions(message.reactions).map((group, idx) => (
+                    <button
+                      key={idx}
+                      onClick={() => {
+                        if (hasUserReacted(message.reactions, group.emoji)) {
+                          handleRemoveReaction(message._id, group.emoji);
+                        } else {
+                          handleAddReaction(message._id, group.emoji);
+                        }
+                      }}
+                      className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-xs border ${
+                        hasUserReacted(message.reactions, group.emoji)
+                          ? 'bg-blue-500/20 border-blue-500'
+                          : 'bg-zinc-700/50 border-zinc-600'
+                      } hover:bg-zinc-600 transition-colors`}
+                    >
+                      <span>{group.emoji}</span>
+                      <span className="text-zinc-300">{group.count}</span>
+                    </button>
+                  ))}
                 </div>
               )}
             </div>
-            
-            {/* Reactions display */}
-            {message.reactions && message.reactions.length > 0 && (
-              <div className="flex items-center gap-1 mt-1 flex-wrap">
-                {groupReactions(message.reactions).map((group, idx) => (
-                  <button
-                    key={idx}
-                    onClick={() => {
-                      if (hasUserReacted(message.reactions, group.emoji)) {
-                        handleRemoveReaction(message._id, group.emoji);
-                      } else {
-                        handleAddReaction(message._id, group.emoji);
-                      }
-                    }}
-                    className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-xs border ${
-                      hasUserReacted(message.reactions, group.emoji)
-                        ? 'bg-blue-500/20 border-blue-500'
-                        : 'bg-zinc-700/50 border-zinc-600'
-                    } hover:bg-zinc-600 transition-colors`}
-                  >
-                    <span>{group.emoji}</span>
-                    <span className="text-zinc-300">{group.count}</span>
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-        ))}
+          );
+        })}
 
         {/* Typing Indicator */}
         {isUserTyping && (
           <div className="chat chat-start">
             <div className='chat-image avatar'>
               <div className='size-10 rounded-full border'>
-                <img src={selectedUser.profilePic || "/avatar.png"} alt="profile Pic" />
+                <img src={getContactAvatar()} alt="profile Pic" />
               </div>
             </div>
             <div className="chat-bubble">

@@ -52,6 +52,11 @@ const messageSchema=new mongoose.Schema({
         ref: "message",
         default: null
     },
+    groupId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "Group",
+        default: null
+    },
     deletedFor: [{
         type: mongoose.Schema.Types.ObjectId,
         ref: "User",

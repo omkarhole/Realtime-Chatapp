@@ -13,7 +13,14 @@ export const useChatStore = create((set,get) => ({
     searchResults: [],
     isSearchLoading: false,
     isSearchOpen: false,
-    replyingTo: null, // State to track the message being replied to
+    replyingTo: null,
+
+    // Group-related state
+    groups: [],
+    selectedGroup: null,
+    isGroupsLoading: false,
+    groupTypingUsers: [],
+    isGroupModalOpen: false,
 
     // Set the message to reply to
     setReplyingTo: (message) => set({ replyingTo: message }),
@@ -30,7 +37,6 @@ export const useChatStore = create((set,get) => ({
         catch (err) {
             console.log("error in getting users", err);
             toast.error("Failed to load users");
-
         }
         finally {
             set({ isUsersLoading: false });
@@ -55,7 +61,6 @@ export const useChatStore = create((set,get) => ({
         try {
             const res=await axiosInstance.post(`/messages/send/${selectedUser._id}`,messageData);
             set({messages:[...messages,res.data]});
-            // Clear the replyingTo state after sending
             if (replyingTo) {
                 clearReplyingTo();
             }
@@ -65,23 +70,17 @@ export const useChatStore = create((set,get) => ({
             console.log("error in sending message", err);
             toast.error("Failed to send message");
         }
-
     },
     subscribeToMessages:()=>{
         const{selectedUser} =get();
         if(!selectedUser) return;
 
         const socket=useAuthStore.getState().socket;
-
-        
         socket.on("newMessage",(newMessage)=>{
             const isMessageSendFromSelectedUser=newMessage.senderId===selectedUser._id
         if (!isMessageSendFromSelectedUser) return;
-            // Mark as delivered when message is received
             const messageWithStatus = { ...newMessage, status: 'delivered' };
             set({messages:[...get().messages,messageWithStatus]});
-            
-            // Automatically mark as read since user is viewing the chat
             get().markMessagesAsRead(selectedUser._id);
         });
     },
@@ -120,21 +119,16 @@ export const useChatStore = create((set,get) => ({
         return get().typingUsers.includes(userId);
     },
 
-    // Mark messages as read
     markMessagesAsRead: async (senderId) => {
         const { selectedUser } = get();
         if (!selectedUser) return;
         
         try {
             await axiosInstance.put(`/messages/mark-read/${senderId}`);
-            
-            // Emit socket event to notify the sender
             const socket = useAuthStore.getState().socket;
             if (socket) {
                 socket.emit("markAsRead", { to: senderId });
             }
-            
-            // Update local message status
             const updatedMessages = get().messages.map(msg => 
                 msg.senderId === senderId ? { ...msg, status: 'read' } : msg
             );
@@ -150,7 +144,6 @@ export const useChatStore = create((set,get) => ({
         if (!socket) return;
 
         socket.on("messageRead", ({ from }) => {
-            // Update messages from the selected user to read status
             const updatedMessages = get().messages.map(msg => 
                 msg.senderId === from ? { ...msg, status: 'read' } : msg
             );
@@ -164,7 +157,6 @@ export const useChatStore = create((set,get) => ({
         socket.off("messageRead");
     },
 
-    // Search messages
     searchMessages: async (query) => {
         if (!query || query.trim() === "") {
             set({ searchResults: [], isSearchOpen: false });
@@ -185,20 +177,14 @@ export const useChatStore = create((set,get) => ({
         }
     },
 
-    // Clear search results
     clearSearch: () => set({ searchResults: [], isSearchOpen: false }),
-
-    // Toggle search panel
     toggleSearch: () => set((state) => ({ isSearchOpen: !state.isSearchOpen })),
 
-    // Export chat history as JSON file
     exportChatHistory: async () => {
         try {
             toast.loading("Exporting chat history...");
             const res = await axiosInstance.get("/messages/all");
             const allMessages = res.data;
-
-            // Format the data for export
             const exportData = {
                 exportDate: new Date().toISOString(),
                 totalMessages: allMessages.length,
@@ -216,8 +202,6 @@ export const useChatStore = create((set,get) => ({
                     updatedAt: msg.updatedAt
                 }))
             };
-
-            // Create and download JSON file
             const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
             const url = URL.createObjectURL(blob);
             const link = document.createElement('a');
@@ -227,7 +211,6 @@ export const useChatStore = create((set,get) => ({
             link.click();
             document.body.removeChild(link);
             URL.revokeObjectURL(url);
-
             toast.dismiss();
             toast.success(`Exported ${allMessages.length} messages successfully!`);
         }
@@ -238,28 +221,19 @@ export const useChatStore = create((set,get) => ({
         }
     },
 
-    // Add reaction to a message
     addReaction: async (messageId, emoji) => {
         const { selectedUser, messages } = get();
         if (!selectedUser) return;
 
         try {
             const res = await axiosInstance.post(`/messages/${messageId}/reactions`, { emoji });
-            
-            // Update local messages state
             const updatedMessages = messages.map(msg => 
                 msg._id === messageId ? res.data : msg
             );
             set({ messages: updatedMessages });
-
-            // Emit socket event
             const socket = useAuthStore.getState().socket;
             if (socket) {
-                socket.emit("addReaction", { 
-                    to: selectedUser._id, 
-                    messageId, 
-                    emoji 
-                });
+                socket.emit("addReaction", { to: selectedUser._id, messageId, emoji });
             }
         }
         catch (err) {
@@ -268,30 +242,19 @@ export const useChatStore = create((set,get) => ({
         }
     },
 
-    // Remove reaction from a message
     removeReaction: async (messageId, emoji) => {
         const { selectedUser, messages } = get();
         if (!selectedUser) return;
 
         try {
-            const res = await axiosInstance.delete(`/messages/${messageId}/reactions`, {
-                data: { emoji }
-            });
-            
-            // Update local messages state
+            const res = await axiosInstance.delete(`/messages/${messageId}/reactions`, { data: { emoji } });
             const updatedMessages = messages.map(msg => 
                 msg._id === messageId ? res.data : msg
             );
             set({ messages: updatedMessages });
-
-            // Emit socket event
             const socket = useAuthStore.getState().socket;
             if (socket) {
-                socket.emit("removeReaction", { 
-                    to: selectedUser._id, 
-                    messageId, 
-                    emoji 
-                });
+                socket.emit("removeReaction", { to: selectedUser._id, messageId, emoji });
             }
         }
         catch (err) {
@@ -300,7 +263,6 @@ export const useChatStore = create((set,get) => ({
         }
     },
 
-    // Subscribe to reaction events
     subscribeToReactions: () => {
         const socket = useAuthStore.getState().socket;
         if (!socket) return;
@@ -309,15 +271,11 @@ export const useChatStore = create((set,get) => ({
             const { messages } = get();
             const updatedMessages = messages.map(msg => {
                 if (msg._id === messageId) {
-                    // Check if reaction already exists
                     const existingReaction = msg.reactions?.find(
                         r => r.userId === reaction.userId && r.emoji === reaction.emoji
                     );
                     if (!existingReaction) {
-                        return {
-                            ...msg,
-                            reactions: [...(msg.reactions || []), reaction]
-                        };
+                        return { ...msg, reactions: [...(msg.reactions || []), reaction] };
                     }
                 }
                 return msg;
@@ -342,7 +300,6 @@ export const useChatStore = create((set,get) => ({
         });
     },
 
-    // Unsubscribe from reaction events
     unSubscribeFromReactions: () => {
         const socket = useAuthStore.getState().socket;
         if (!socket) return;
@@ -350,19 +307,15 @@ export const useChatStore = create((set,get) => ({
         socket.off("reactionRemoved");
     },
 
-    // Delete message for everyone
     deleteMessage: async (messageId) => {
         const { messages } = get();
         
         try {
             const res = await axiosInstance.delete(`/messages/${messageId}`);
-            
-            // Update local messages state with deletedFor array
             const updatedMessages = messages.map(msg => 
                 msg._id === messageId ? { ...msg, deletedFor: res.data.deletedFor } : msg
             );
             set({ messages: updatedMessages });
-            
             toast.success("Message deleted for everyone");
         }
         catch (err) {
@@ -372,7 +325,6 @@ export const useChatStore = create((set,get) => ({
         }
     },
 
-    // Subscribe to message deletion events
     subscribeToDeletedMessages: () => {
         const socket = useAuthStore.getState().socket;
         if (!socket) return;
@@ -381,10 +333,7 @@ export const useChatStore = create((set,get) => ({
             const { messages } = get();
             const updatedMessages = messages.map(msg => {
                 if (msg._id === messageId) {
-                    return {
-                        ...msg,
-                        deletedFor: deletedFor
-                    };
+                    return { ...msg, deletedFor: deletedFor };
                 }
                 return msg;
             });
@@ -392,11 +341,250 @@ export const useChatStore = create((set,get) => ({
         });
     },
 
-    // Unsubscribe from message deletion events
     unSubscribeFromDeletedMessages: () => {
         const socket = useAuthStore.getState().socket;
         if (!socket) return;
         socket.off("messageDeleted");
     },
 
-}))
+    // ==================== GROUP ACTIONS ====================
+    
+    toggleGroupModal: () => set((state) => ({ isGroupModalOpen: !state.isGroupModalOpen })),
+    
+    setSelectedGroup: (group) => set({ selectedGroup: group }),
+    
+    getGroups: async () => {
+        set({ isGroupsLoading: true });
+        try {
+            const res = await axiosInstance.get("/groups");
+            set({ groups: res.data });
+        }
+        catch (err) {
+            console.log("Error fetching groups:", err);
+            toast.error("Failed to load groups");
+        }
+        finally {
+            set({ isGroupsLoading: false });
+        }
+    },
+    
+    createGroup: async (groupData) => {
+        try {
+            const res = await axiosInstance.post("/groups", groupData);
+            set((state) => ({ groups: [...state.groups, res.data] }));
+            toast.success("Group created successfully");
+            return res.data;
+        }
+        catch (err) {
+            console.log("Error creating group:", err);
+            toast.error(err.response?.data?.message || "Failed to create group");
+            throw err;
+        }
+    },
+    
+    getGroupMessages: async (groupId) => {
+        try {
+            set({ isMessagesLoading: true });
+            const res = await axiosInstance.get(`/groups/${groupId}/messages`);
+            set({ messages: res.data });
+        }
+        catch (err) {
+            console.log("Error fetching group messages:", err);
+            toast.error("Failed to load group messages");
+        }
+        finally {
+            set({ isMessagesLoading: false });
+        }
+    },
+    
+    sendGroupMessage: async (messageData) => {
+        const { selectedGroup, messages, replyingTo, clearReplyingTo } = get();
+        if (!selectedGroup) return;
+        
+        try {
+            const res = await axiosInstance.post(`/groups/${selectedGroup._id}/messages`, messageData);
+            set({ messages: [...messages, res.data] });
+            if (replyingTo) {
+                clearReplyingTo();
+            }
+            toast.success("Message sent");
+            return res.data;
+        }
+        catch (err) {
+            console.log("Error sending group message:", err);
+            toast.error("Failed to send message");
+            throw err;
+        }
+    },
+    
+    subscribeToGroupMessages: () => {
+        const { selectedGroup } = get();
+        if (!selectedGroup) return;
+
+        const socket = useAuthStore.getState().socket;
+
+        socket.on("newGroupMessage", (newMessage) => {
+            if (newMessage.groupId === selectedGroup._id) {
+                set({ messages: [...get().messages, newMessage] });
+            }
+        });
+
+        socket.on("groupUpdated", (updatedGroup) => {
+            set((state) => ({
+                groups: state.groups.map(g => g._id === updatedGroup._id ? updatedGroup : g),
+                selectedGroup: state.selectedGroup?._id === updatedGroup._id ? updatedGroup : state.selectedGroup
+            }));
+        });
+
+        socket.on("groupMemberAdded", ({ group }) => {
+            set((state) => ({
+                groups: state.groups.some(g => g._id === group._id)
+                    ? state.groups.map(g => g._id === group._id ? group : g)
+                    : [...state.groups, group]
+            }));
+            if (get().selectedGroup?._id === group._id) {
+                set({ selectedGroup: group });
+            }
+            toast.success(`You were added to ${group.name}`);
+        });
+
+        socket.on("groupMemberRemoved", ({ groupId }) => {
+            const { selectedGroup } = get();
+            if (selectedGroup?._id === groupId) {
+                set({ selectedGroup: null, messages: [] });
+                toast.error("You were removed from the group");
+            }
+        });
+
+        socket.on("groupMemberLeft", ({ groupId, userId }) => {
+            set((state) => ({
+                groups: state.groups.map(g => {
+                    if (g._id === groupId) {
+                        return { ...g, members: g.members.filter(m => m._id !== userId) };
+                    }
+                    return g;
+                })
+            }));
+        });
+
+        socket.on("groupDeleted", ({ groupId }) => {
+            set((state) => ({
+                groups: state.groups.filter(g => g._id !== groupId),
+                selectedGroup: state.selectedGroup?._id === groupId ? null : state.selectedGroup,
+                messages: state.selectedGroup?._id === groupId ? [] : state.messages
+            }));
+            toast.error("A group was deleted");
+        });
+    },
+    
+    unSubscribeFromGroupMessages: () => {
+        const socket = useAuthStore.getState().socket;
+        if (!socket) return;
+        socket.off("newGroupMessage");
+        socket.off("groupUpdated");
+        socket.off("groupMemberAdded");
+        socket.off("groupMemberRemoved");
+        socket.off("groupMemberLeft");
+        socket.off("groupDeleted");
+    },
+    
+    subscribeToGroupTyping: () => {
+        const socket = useAuthStore.getState().socket;
+        if (!socket) return;
+
+        socket.on("groupTyping", ({ groupId, from }) => {
+            const { selectedGroup, groupTypingUsers } = get();
+            if (selectedGroup?._id === groupId && !groupTypingUsers.includes(from)) {
+                set({ groupTypingUsers: [...groupTypingUsers, from] });
+            }
+        });
+
+        socket.on("groupStopTyping", ({ groupId, from }) => {
+            const { groupTypingUsers } = get();
+            if (get().selectedGroup?._id === groupId) {
+                set({ groupTypingUsers: groupTypingUsers.filter(userId => userId !== from) });
+            }
+        });
+    },
+
+    unSubscribeFromGroupTyping: () => {
+        const socket = useAuthStore.getState().socket;
+        if (!socket) return;
+        socket.off("groupTyping");
+        socket.off("groupStopTyping");
+    },
+
+    isGroupTyping: (userId) => {
+        return get().groupTypingUsers.includes(userId);
+    },
+
+    emitGroupTyping: () => {
+        const { selectedGroup } = get();
+        if (!selectedGroup) return;
+        const socket = useAuthStore.getState().socket;
+        if (socket) {
+            const members = selectedGroup.members.map(m => m._id || m);
+            socket.emit("groupTyping", { groupId: selectedGroup._id, members });
+        }
+    },
+
+    emitGroupStopTyping: () => {
+        const { selectedGroup } = get();
+        if (!selectedGroup) return;
+        const socket = useAuthStore.getState().socket;
+        if (socket) {
+            const members = selectedGroup.members.map(m => m._id || m);
+            socket.emit("groupStopTyping", { groupId: selectedGroup._id, members });
+        }
+    },
+
+    addGroupMember: async (groupId, userId) => {
+        try {
+            const res = await axiosInstance.post(`/groups/${groupId}/members`, { userId });
+            set((state) => ({
+                groups: state.groups.map(g => g._id === groupId ? res.data : g),
+                selectedGroup: state.selectedGroup?._id === groupId ? res.data : state.selectedGroup
+            }));
+            toast.success("Member added successfully");
+            return res.data;
+        }
+        catch (err) {
+            console.log("Error adding member:", err);
+            toast.error(err.response?.data?.message || "Failed to add member");
+            throw err;
+        }
+    },
+
+    removeGroupMember: async (groupId, userId) => {
+        try {
+            const res = await axiosInstance.delete(`/groups/${groupId}/members/${userId}`);
+            set((state) => ({
+                groups: state.groups.map(g => g._id === groupId ? res.data : g),
+                selectedGroup: state.selectedGroup?._id === groupId ? res.data : state.selectedGroup
+            }));
+            toast.success("Member removed successfully");
+            return res.data;
+        }
+        catch (err) {
+            console.log("Error removing member:", err);
+            toast.error(err.response?.data?.message || "Failed to remove member");
+            throw err;
+        }
+    },
+
+    leaveGroup: async (groupId) => {
+        try {
+            await axiosInstance.post(`/groups/${groupId}/leave`);
+            set((state) => ({
+                groups: state.groups.filter(g => g._id !== groupId),
+                selectedGroup: state.selectedGroup?._id === groupId ? null : state.selectedGroup,
+                messages: state.selectedGroup?._id === groupId ? [] : state.messages
+            }));
+            toast.success("Left group successfully");
+        }
+        catch (err) {
+            console.log("Error leaving group:", err);
+            toast.error(err.response?.data?.message || "Failed to leave group");
+        }
+    }
+}));
