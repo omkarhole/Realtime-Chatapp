@@ -34,6 +34,8 @@ const ChatContainer = () => {
   const messagesEndRef = useRef(null);
   const isMarkingReadRef = useRef(false);
 
+  const isGroup = !!selectedGroup;
+
   useEffect(() => {
     getMessages(selectedUser._id);
     subscribeToReadReceipts();
@@ -67,7 +69,7 @@ const ChatContainer = () => {
         isMarkingReadRef.current = false;
       });
     }
-  }, [messages, selectedUser, markMessagesAsRead]);
+  }, [messages, selectedUser, markMessagesAsRead, isGroup]);
 
   useEffect(() => {
     if (!socket || !selectedUser?._id) return;
@@ -166,7 +168,6 @@ const ChatContainer = () => {
           {isPlaying ? <Pause size={18} /> : <Play size={18} />}
         </button>
         <div className="flex-1">
-          {/* Progress bar */}
           <div className="w-full h-1.5 bg-zinc-600 rounded-full mb-1">
             <div 
               className="h-full bg-primary rounded-full transition-all"
@@ -201,6 +202,14 @@ const ChatContainer = () => {
       </div>
     );
   }
+
+  // Get contact for avatar display
+  const getContactAvatar = () => {
+    if (isGroup) {
+      return selectedGroup?.avatar || '/avatar.png';
+    }
+    return selectedUser?.profilePic || '/avatar.png';
+  };
 
   return (
     <div className="flex-1 flex flex-col overflow-auto">

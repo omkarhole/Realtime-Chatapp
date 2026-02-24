@@ -11,6 +11,7 @@ const Sidebar = () => {
 
   const [showOnlineOnly, setShowOnlineOnly] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const [activeTab, setActiveTab] = useState("chats"); // "chats" or "groups"
 
   useEffect(() => {
     const timeoutId = setTimeout(() => {
@@ -61,6 +62,13 @@ const Sidebar = () => {
               </button>
             )}
           </div>
+          <button
+            onClick={toggleGroupModal}
+            className="btn btn-circle btn-sm btn-ghost"
+            title="Create Group"
+          >
+            <Plus size={20} />
+          </button>
         </div>
 
         <div className="mt-3 hidden md:flex items-center gap-2">
@@ -75,6 +83,43 @@ const Sidebar = () => {
           </label>
           <span className="text-xs text-zinc-500">({Math.max(0, onlineUsers.length - 1)} online)</span>
         </div>
+
+        {/* Search Input - Only show for chats */}
+        {activeTab === "chats" && (
+          <>
+            <div className="mt-3 relative">
+              <div className="flex items-center gap-2">
+                <Search className="size-4 text-zinc-400" />
+                <input
+                  type="text"
+                  placeholder="Search messages..."
+                  value={searchQuery}
+                  onChange={handleSearch}
+                  className="input input-sm input-bordered w-full bg-base-200"
+                />
+                {searchQuery && (
+                  <button onClick={handleClearSearch} className="absolute right-2">
+                    <X className="size-4 text-zinc-400" />
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* online filter toggle */}
+            <div className="mt-3 hidden lg:flex items-center gap-2">
+              <label className="cursor-pointer flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={showOnlineOnly}
+                  onChange={(e) => setShowOnlineOnly(e.target.checked)}
+                  className="checkbox checkbox-sm"
+                />
+                <span className="text-sm">Show online only</span>
+              </label>
+              <span className="text-xs text-zinc-500">({onlineUsers.length - 1} online)</span>
+            </div>
+          </>
+        )}
       </div>
 
       <div className="overflow-y-auto w-full py-3">

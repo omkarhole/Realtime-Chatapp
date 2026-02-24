@@ -6,6 +6,7 @@ import path from "path";
 import { connectDB } from "./lib/db.js";
 import authRoutes from "./routes/auth.route.js";
 import messageRoutes from "./routes/message.route.js";
+import groupRoutes from "./routes/group.route.js";
 import { app, server } from "./lib/socket.js";
 
 dotenv.config({ path: ".local.env", quiet: true });
@@ -40,6 +41,9 @@ app.use("/api/auth",authRoutes)
 
 // messages routes
 app.use("/api/messages",messageRoutes)
+
+// group routes
+app.use("/api/groups", groupRoutes)
 
 
 if (process.env.NODE_ENV === "production") {
