@@ -26,6 +26,13 @@ const messageSchema=new mongoose.Schema({
     pdf:{
         type:String,
     },
+    audio:{
+        type:String,
+    },
+    audioDuration:{
+        type:Number,
+        default: 0
+    },
     status:{
         type:String,
         enum:['sent','delivered','read'],
@@ -51,6 +58,11 @@ const messageSchema=new mongoose.Schema({
         ref: "message",
         default: null
     },
+    deletedFor: [{
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "User",
+        default: []
+    }],
 
 },
 {timestamps:true}

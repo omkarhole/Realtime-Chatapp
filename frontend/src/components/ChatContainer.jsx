@@ -42,6 +42,7 @@ const ChatContainer = () => {
     return () => {
       unSubscribeFromReadReceipts();
       unSubscribeFromReactions();
+      unSubscribeFromDeletedMessages();
     };
   }, [
     selectedUser._id,
@@ -146,6 +147,47 @@ const ChatContainer = () => {
           <p className="text-xs text-primary font-medium">{senderName}</p>
           <p className="text-xs text-zinc-400 truncate">{previewText}</p>
         </div>
+      </div>
+    );
+  };
+
+  // Render audio player
+  const renderAudioPlayer = (message) => {
+    const duration = message.audioDuration || 0;
+    const isPlaying = playingAudioId === message._id;
+    const progress = audioProgress[message._id] || 0;
+
+    return (
+      <div className="flex items-center gap-2 p-2 rounded-lg bg-zinc-700/50 mb-2 min-w-[200px] max-w-[250px]">
+        <button
+          onClick={() => toggleAudioPlayback(message._id, message.audio)}
+          className="btn btn-circle btn-sm btn-ghost flex-shrink-0"
+        >
+          {isPlaying ? <Pause size={18} /> : <Play size={18} />}
+        </button>
+        <div className="flex-1">
+          {/* Progress bar */}
+          <div className="w-full h-1.5 bg-zinc-600 rounded-full mb-1">
+            <div 
+              className="h-full bg-primary rounded-full transition-all"
+              style={{ width: `${progress}%` }}
+            />
+          </div>
+          <div className="flex justify-between items-center">
+            <span className="text-xs text-zinc-400">
+              {isPlaying 
+                ? formatAudioTime(audioRefs.current[message._id]?.currentTime || 0)
+                : formatAudioTime(duration)
+              }
+            </span>
+          </div>
+        </div>
+        <audio 
+          ref={el => audioRefs.current[message._id] = el}
+          src={message.audio}
+          onEnded={() => handleAudioEnded(message._id)}
+          onTimeUpdate={() => handleAudioTimeUpdate(message._id, duration)}
+        />
       </div>
     );
   };

@@ -22,6 +22,9 @@ const ReplyPreview = ({ message, onCancel }) => {
 
   // Get the preview text - truncate if too long
   const getPreviewText = () => {
+    if (message.audio) {
+      return '🎤 Voice Message';
+    }
     if (message.image) {
       return '📷 Photo';
     }
@@ -37,7 +40,7 @@ const ReplyPreview = ({ message, onCancel }) => {
   };
 
   return (
-    <div className="flex items-start gap-2 p-2 bg-base-200 rounded-lg border border-l-4 border-l-primary mb-2">
+    <div className="flex items-start gap-2 p-2 bg-base-200 rounded-lg border-l-4 border-primary mb-2">
       <Reply size={16} className="text-primary mt-1 flex-shrink-0" />
       <div className="flex-1 min-w-0">
         <p className="text-xs text-primary font-medium">
