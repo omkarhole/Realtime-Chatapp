@@ -8,11 +8,12 @@ import authRoutes from "./routes/auth.route.js";
 import messageRoutes from "./routes/message.route.js";
 import groupRoutes from "./routes/group.route.js";
 import { app, server } from "./lib/socket.js";
+import { UPLOAD, SERVER } from "./constants/index.js";
 
 dotenv.config({ path: ".local.env", quiet: true });
 dotenv.config({ path: ".env", quiet: true });
 
-app.use(express.json({ limit: "10mb" }));
+app.use(express.json({ limit: UPLOAD.JSON_LIMIT }));
 app.use(cookieParser());
 const __dirname = path.resolve();
 
@@ -32,9 +33,7 @@ app.use(cors({
   credentials: true
 }));
 
-const PORT = process.env.PORT || 5001;
-
-
+const PORT = process.env.PORT || SERVER.DEFAULT_PORT;
 
 // auth routes 
 app.use("/api/auth",authRoutes)

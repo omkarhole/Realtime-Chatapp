@@ -1,3 +1,4 @@
+// Theme constants
 export const THEMES = [
   "light",
   "dark",
@@ -32,3 +33,19 @@ export const THEMES = [
   "nord",
   "sunset",
 ];
+
+// API constants
+export const API = {
+  DEV_BACKEND_URL: 'http://localhost:5001',
+  API_PREFIX: '/api'
+};
+
+// Socket constants
+export const SOCKET = {
+  DEV_URL: 'http://localhost:5001'
+};
+
+// Frontend constants
+export const FRONTEND = {
+  DEV_URL: 'http://localhost:5173'
+};

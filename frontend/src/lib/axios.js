@@ -1,4 +1,5 @@
 import axios from "axios";
+import { API } from "../constants/index.js";
 
 const BASE_URL = import.meta.env.MODE === "development" 
   ? "http://localhost:5001/api" 
