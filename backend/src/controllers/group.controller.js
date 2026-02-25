@@ -10,14 +10,6 @@ export const createGroup = async (req, res) => {
         const { name, members, avatar } = req.body;
         const adminId = req.user._id;
 
-        if (!name || !name.trim()) {
-            return res.status(400).json({ message: "Group name is required" });
-        }
-
-        if (!members || !Array.isArray(members) || members.length < 1) {
-            return res.status(400).json({ message: "At least one member is required" });
-        }
-
         // Add admin to members if not already included
         const allMembers = [...new Set([adminId.toString(), ...members])];
 
