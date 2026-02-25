@@ -9,21 +9,21 @@ import messageRoutes from "./routes/message.route.js";
 import groupRoutes from "./routes/group.route.js";
 import { app, server } from "./lib/socket.js";
 
-dotenv.config({ path: ".local.env" });
+dotenv.config({ path: ".local.env", quiet: true });
+dotenv.config({ path: ".env", quiet: true });
 
 app.use(express.json({ limit: "10mb" }));
 app.use(cookieParser());
 const __dirname = path.resolve();
 
-// CORS configuration for production
-const allowedOrigins = [
-  "http://localhost:5173",
-  process.env.FRONTEND_URL
-].filter(Boolean);
+const isLocalOrigin = (origin = "") =>
+  /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/i.test(origin);
+
+const allowedOrigins = [process.env.FRONTEND_URL].filter(Boolean);
 
 app.use(cors({
   origin: function (origin, callback) {
-    if (!origin || allowedOrigins.includes(origin)) {
+    if (!origin || isLocalOrigin(origin) || allowedOrigins.includes(origin)) {
       callback(null, true);
     } else {
       callback(new Error("Not allowed by CORS"));
@@ -57,6 +57,18 @@ if (process.env.NODE_ENV === "production") {
 app.get("/",(req,res)=>{
     res.send("hello from backend");
 })
+
+server.on("error", (err) => {
+  if (err.code === "EADDRINUSE") {
+    console.error(
+      `Port ${PORT} is already in use. Stop the existing backend process first, then restart nodemon.`
+    );
+    process.exit(1);
+  }
+
+  console.error("Server startup error:", err);
+  process.exit(1);
+});
 
 server.listen(PORT,()=>{
     console.log(`server is running on port ${PORT}`);
