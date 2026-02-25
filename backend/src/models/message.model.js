@@ -68,6 +68,15 @@ const messageSchema=new mongoose.Schema({
 
 );
 
+// Add compound indexes for common queries
+messageSchema.index({ senderId: 1, receiverId: 1, createdAt: -1 });
+messageSchema.index({ groupId: 1, createdAt: 1 });
+messageSchema.index({ senderId: 1, createdAt: -1 });
+messageSchema.index({ receiverId: 1, createdAt: -1 });
+
+// Text index for search functionality
+messageSchema.index({ text: 'text' });
+
 const Message=mongoose.model("message",messageSchema);
 
 export default Message;
