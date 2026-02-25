@@ -1,6 +1,6 @@
 import User from "../models/user.model.js";
 import Message from "../models/message.model.js";
-import cloudinary from "../lib/cloudinary.js";
+import { uploadImage, uploadPdf, uploadAudio } from "../lib/cloudinaryUpload.js";
 import { getReciverSocketId, io } from "../lib/socket.js";
 
 // get all users except logged in user for sidebar
@@ -47,31 +47,10 @@ export const sendMessage = async (req, res) => {
         const { id: receiverId } = req.params;
         const senderId = req.user._id;
 
-        let imageUrl;
-        let pdfUrl;
-        let audioUrl;
-
-        //if image exists upload image to cloudinary and get the url
-        if (image) {
-            const uploadResponse = await cloudinary.uploader.upload(image);
-            imageUrl = uploadResponse.secure_url;
-        }
-
-        //if pdf exists upload pdf to cloudinary and get the url
-        if (pdf) {
-            const uploadResponse = await cloudinary.uploader.upload(pdf, {
-                resource_type: "raw"
-            });
-            pdfUrl = uploadResponse.secure_url;
-        }
-
-        //if audio exists upload audio to cloudinary and get the url
-        if (audio) {
-            const uploadResponse = await cloudinary.uploader.upload(audio, {
-                resource_type: "video"
-            });
-            audioUrl = uploadResponse.secure_url;
-        }
+        // Upload files to Cloudinary
+        const imageUrl = await uploadImage(image);
+        const pdfUrl = await uploadPdf(pdf);
+        const audioUrl = await uploadAudio(audio);
 
         const newMessage = new Message({
             senderId,
