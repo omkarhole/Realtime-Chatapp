@@ -13,6 +13,7 @@ import {
     getGroupMessages,
     getAvailableUsers 
 } from "../controllers/group.controller.js";
+import { validate, createGroupSchema, addMemberSchema, updateGroupSchema } from "../middleware/validation.js";
 
 const router = express.Router();
 
@@ -20,14 +21,14 @@ const router = express.Router();
 router.use(protectRoute);
 
 // Group CRUD
-router.post("/", createGroup);
+router.post("/", validate(createGroupSchema), createGroup);
 router.get("/", getMyGroups);
 router.get("/:id", getGroupById);
-router.put("/:id", updateGroup);
+router.put("/:id", validate(updateGroupSchema), updateGroup);
 router.delete("/:id", deleteGroup);
 
 // Member management
-router.post("/:id/members", addMember);
+router.post("/:id/members", validate(addMemberSchema), addMember);
 router.delete("/:id/members/:userId", removeMember);
 router.post("/:id/leave", leaveGroup);
 router.get("/:groupId/available-users", getAvailableUsers);

@@ -5,13 +5,6 @@ import { uploadProfilePic } from "../lib/cloudinaryUpload.js";
 export const signup = async (req, res) => {
     const { fullName, email, password } = req.body;
     try {
-
-        if (!fullName || !email || !password) {
-            return res.status(400).json({ message: "All fields are required" });
-        }
-        if (password.length < 6) {
-            return res.status(400).json({ message: "Password must be at least 6 characters long" });
-        }
         const user = await User.findOne({ email })
         if (user) return res.status(400).json({ message: "User already exists with this email" });
 
@@ -47,9 +40,6 @@ export const signup = async (req, res) => {
 export const login = async (req, res) => {
     const { email, password } = req.body;
     try {
-        if (!email || !password) {
-            return res.status(400).json({ message: "All fields are required" });
-        }
         const user = await User.findOne({ email })
         if (!user) {
             return res.status(400).json({ message: "invalid Credentials" });
@@ -102,9 +92,6 @@ export const updateProfile=async(req,res)=>{
     try{
         const {profilePic}=req.body;
         const userId=req.user._id;
-        if(!profilePic){
-            return res.status(400).json({message:"Profile picture is required"});
-        }
         const profilePicUrl = await uploadProfilePic(profilePic);
         const updatedUser=await User.findByIdAndUpdate(userId,{
             profilePic:profilePicUrl
