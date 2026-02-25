@@ -1,259 +1,153 @@
-import React, { useEffect, useState, useRef } from 'react'
-import { useChatStore } from '../store/useChatStore';
-import ChatHeader from './ChatHeader';
-import MessageInput from './MessageInput';
-import MessageSkeleton from './MessageSkeleton';
-import { useAuthStore } from '../store/useAuthStore';
-import { formatMessageTime } from '../lib/utils';
-import { FileText, Download, Reply, Play, Pause, Trash2 } from 'lucide-react';
-import EmojiPicker from './EmojiPicker';
+import React, { useEffect, useRef } from "react";
+import { FileText, Download, Reply } from "lucide-react";
+import { useChatStore } from "../store/useChatStore";
+import { useAuthStore } from "../store/useAuthStore";
+import { formatMessageTime } from "../lib/utils";
+import ChatHeader from "./ChatHeader";
+import MessageInput from "./MessageInput";
+import MessageSkeleton from "./MessageSkeleton";
+import EmojiPicker from "./EmojiPicker";
+
+const normalizeId = (value) => {
+  if (!value) return "";
+  if (typeof value === "object") return String(value._id || value.id || "");
+  return String(value);
+};
 
 const ChatContainer = () => {
-
-  const { 
-    messages, 
-    getMessages, 
-    isMessagesLoading, 
-    selectedUser, 
-    selectedGroup,
-    subscribeToMessages, 
-    unSubscribeFromMessages, 
-    subscribeToTyping, 
-    unSubscribeFromTyping, 
-    isTyping, 
-    markMessagesAsRead, 
-    subscribeToReadReceipts, 
-    unSubscribeFromReadReceipts, 
-    subscribeToReactions, 
-    unSubscribeFromReactions, 
-    addReaction, 
-    removeReaction, 
-    setReplyingTo, 
-    deleteMessage, 
-    subscribeToDeletedMessages, 
-    unSubscribeFromDeletedMessages,
-    getGroupMessages,
-    subscribeToGroupMessages,
-    unSubscribeFromGroupMessages,
-    subscribeToGroupTyping,
-    unSubscribeFromGroupTyping,
-    groupTypingUsers
+  const {
+    messages,
+    getMessages,
+    isMessagesLoading,
+    selectedUser,
+    markMessagesAsRead,
+    subscribeToReadReceipts,
+    unSubscribeFromReadReceipts,
+    subscribeToReactions,
+    unSubscribeFromReactions,
+    addReaction,
+    removeReaction,
+    setReplyingTo,
   } = useChatStore();
-  const { authUser } = useAuthStore();
+
+  const { authUser, socket } = useAuthStore();
   const messagesEndRef = useRef(null);
-  const [messageReactions, setMessageReactions] = useState({});
-  const [playingAudioId, setPlayingAudioId] = useState(null);
-  const [audioProgress, setAudioProgress] = useState({});
-  const audioRefs = useRef({});
+  const isMarkingReadRef = useRef(false);
 
   const isGroup = !!selectedGroup;
 
   useEffect(() => {
-    if (isGroup) {
-      getGroupMessages(selectedGroup._id);
-      subscribeToGroupMessages();
-      subscribeToGroupTyping();
-    } else {
-      getMessages(selectedUser._id);
-      subscribeToMessages();
-      subscribeToTyping();
-      subscribeToReadReceipts();
-    }
+    getMessages(selectedUser._id);
+    subscribeToReadReceipts();
     subscribeToReactions();
-    subscribeToDeletedMessages();
-    
+
     return () => {
-      if (isGroup) {
-        unSubscribeFromGroupMessages();
-        unSubscribeFromGroupTyping();
-      } else {
-        unSubscribeFromMessages();
-        unSubscribeFromTyping();
-        unSubscribeFromReadReceipts();
-      }
+      unSubscribeFromReadReceipts();
       unSubscribeFromReactions();
       unSubscribeFromDeletedMessages();
     };
-  }, [isGroup ? selectedGroup?._id : selectedUser?._id]);
+  }, [
+    selectedUser._id,
+    getMessages,
+    subscribeToReadReceipts,
+    unSubscribeFromReadReceipts,
+    subscribeToReactions,
+    unSubscribeFromReactions,
+  ]);
 
-  // Mark messages as read when user opens chat (only for individual chats)
   useEffect(() => {
-    if (selectedUser && messages.length > 0 && !isGroup) {
-      markMessagesAsRead(selectedUser._id);
+    if (!selectedUser || messages.length === 0) return;
+
+    const hasUnreadFromSelected = messages.some(
+      (message) =>
+        normalizeId(message.senderId) === normalizeId(selectedUser._id) && message.status !== "read"
+    );
+
+    if (hasUnreadFromSelected && !isMarkingReadRef.current) {
+      isMarkingReadRef.current = true;
+      Promise.resolve(markMessagesAsRead(selectedUser._id)).finally(() => {
+        isMarkingReadRef.current = false;
+      });
     }
   }, [messages, selectedUser, markMessagesAsRead, isGroup]);
 
   useEffect(() => {
-    if (messagesEndRef.current && messages) {
-      messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-    }
-  }, [messages])
+    if (!socket || !selectedUser?._id) return;
+    socket.emit("joinConversation", { to: selectedUser._id });
+    return () => {
+      socket.emit("leaveConversation", { to: selectedUser._id });
+    };
+  }, [socket, selectedUser?._id]);
 
-  // Typing indicator - different for group vs individual
-  const isUserTyping = isGroup 
-    ? groupTypingUsers.length > 0
-    : selectedUser && isTyping(selectedUser._id);
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages]);
 
-  // Get sender name for group messages
-  const getSenderName = (message) => {
-    if (!isGroup) return null;
-    if (message.senderId === authUser._id) return 'You';
-    if (message.senderId && message.senderId.fullName) {
-      return message.senderId.fullName;
-    }
-    return 'Unknown';
-  };
-
-  // Get sender avatar for group messages
-  const getSenderAvatar = (message) => {
-    if (message.senderId === authUser._id) {
-      return authUser.profilePic || '/avatar.png';
-    }
-    if (message.senderId && message.senderId.profilePic) {
-      return message.senderId.profilePic;
-    }
-    return '/avatar.png';
-  };
-
-  // Audio playback functions
-  const toggleAudioPlayback = (messageId, audioUrl) => {
-    if (playingAudioId === messageId) {
-      if (audioRefs.current[messageId]) {
-        audioRefs.current[messageId].pause();
-      }
-      setPlayingAudioId(null);
-    } else {
-      if (audioRefs.current[messageId]) {
-        audioRefs.current[messageId].play();
-        setPlayingAudioId(messageId);
-      }
-    }
-  };
-
-  const handleAudioEnded = (messageId) => {
-    setPlayingAudioId(null);
-    setAudioProgress(prev => ({ ...prev, [messageId]: 0 }));
-  };
-
-  const handleAudioTimeUpdate = (messageId, duration) => {
-    if (audioRefs.current[messageId]) {
-      const currentTime = audioRefs.current[messageId].currentTime;
-      const progress = (currentTime / duration) * 100;
-      setAudioProgress(prev => ({ ...prev, [messageId]: progress }));
-    }
-  };
-
-  const formatAudioTime = (seconds) => {
-    if (!seconds || isNaN(seconds)) return '0:00';
-    const mins = Math.floor(seconds / 60);
-    const secs = Math.floor(seconds % 60);
-    return `${mins}:${secs.toString().padStart(2, '0')}`;
-  };
-
-  // Function to render message status indicator (only for individual chats)
   const renderMessageStatus = (status) => {
-    if (isGroup) return null;
-    if (status === 'read') {
-      return <span className="text-blue-500 ml-1">✓✓</span>;
-    } else if (status === 'delivered') {
-      return <span className="text-gray-400 ml-1">✓✓</span>;
-    } else {
-      return <span className="text-gray-400 ml-1">✓</span>;
-    }
+    if (status === "read") return <span className="text-blue-500 ml-1">✓✓</span>;
+    if (status === "delivered") return <span className="text-gray-400 ml-1">✓✓</span>;
+    return <span className="text-gray-400 ml-1">✓</span>;
   };
 
-  // Helper function to get file name from URL
   const getFileName = (url) => {
-    if (!url) return 'Document';
-    const parts = url.split('/');
+    if (!url) return "Document";
+    const parts = url.split("/");
     const fileName = parts[parts.length - 1];
-    return decodeURIComponent(fileName.replace(/\.[^/.]+$/, ''));
+    return decodeURIComponent(fileName.replace(/\.[^/.]+$/, ""));
   };
 
-  // Handle adding a reaction
-  const handleAddReaction = (messageId, emoji) => {
-    addReaction(messageId, emoji);
-  };
+  const hasUserReacted = (reactions, emoji) =>
+    reactions?.some(
+      (reaction) =>
+        normalizeId(reaction.userId) === normalizeId(authUser._id) && reaction.emoji === emoji
+    );
 
-  // Handle removing a reaction
-  const handleRemoveReaction = (messageId, emoji) => {
-    removeReaction(messageId, emoji);
-  };
-
-  // Handle reply to message
-  const handleReply = (message) => {
-    setReplyingTo(message);
-  };
-
-  // Handle delete message
-  const handleDeleteMessage = (messageId) => {
-    deleteMessage(messageId);
-  };
-
-  // Check if message is deleted for the current user
-  const isMessageDeleted = (message) => {
-    if (!message.deletedFor) return false;
-    return message.deletedFor.some(id => id === authUser._id || id === authUser._id.toString());
-  };
-
-  // Check if user has reacted with a specific emoji
-  const hasUserReacted = (reactions, emoji) => {
-    return reactions?.some(r => r.userId === authUser._id && r.emoji === emoji);
-  };
-
-  // Group reactions by emoji
   const groupReactions = (reactions) => {
     if (!reactions || reactions.length === 0) return [];
     const grouped = {};
-    reactions.forEach(r => {
-      if (!grouped[r.emoji]) {
-        grouped[r.emoji] = [];
-      }
-      grouped[r.emoji].push(r.userId);
+
+    reactions.forEach((reaction) => {
+      if (!grouped[reaction.emoji]) grouped[reaction.emoji] = [];
+      grouped[reaction.emoji].push(normalizeId(reaction.userId));
     });
-    return Object.entries(grouped).map(([emoji, users]) => ({ emoji, count: users.length, users }));
+
+    return Object.entries(grouped).map(([emoji, users]) => ({
+      emoji,
+      count: users.length,
+      users,
+    }));
   };
 
-  // Get the original message that is being replied to
-  const getReplyMessage = (replyToId) => {
-    return messages.find(m => m._id === replyToId);
-  };
+  const getReplyMessage = (replyToId) => messages.find((message) => message._id === replyToId);
 
-  // Render the quoted message preview
   const renderReplyPreview = (replyToId) => {
     const replyMessage = getReplyMessage(replyToId);
     if (!replyMessage) return null;
 
-    const getReplySenderName = () => {
-      if (replyMessage.senderId === authUser._id) return 'You';
-      if (replyMessage.senderId && replyMessage.senderId.fullName) {
-        return replyMessage.senderId.fullName;
-      }
-      return 'User';
-    };
+    const senderName =
+      normalizeId(replyMessage.senderId) === normalizeId(authUser._id)
+        ? "You"
+        : replyMessage.senderId?.fullName || "User";
 
-    const getPreviewText = () => {
-      if (replyMessage.audio) return '🎤 Voice Message';
-      if (replyMessage.image) return '📷 Photo';
-      if (replyMessage.pdf) return '📄 Document';
-      if (replyMessage.text) {
-        return replyMessage.text.length > 30 
-          ? replyMessage.text.substring(0, 30) + '...' 
+    let previewText = "Message";
+    if (replyMessage.image) previewText = "Photo";
+    else if (replyMessage.pdf) previewText = "Document";
+    else if (replyMessage.text) {
+      previewText =
+        replyMessage.text.length > 30
+          ? `${replyMessage.text.substring(0, 30)}...`
           : replyMessage.text;
-      }
-      return 'Message';
-    };
+    }
 
     return (
-      <div className="flex items-start gap-2 p-2 bg-base-200 rounded-lg border-l-2 border-primary mb-2 cursor-pointer" onClick={() => handleReply(replyMessage)}>
+      <div
+        className="flex items-start gap-2 p-2 bg-base-200 rounded-lg border-l-2 border-primary mb-2 cursor-pointer"
+        onClick={() => setReplyingTo(replyMessage)}
+      >
         <Reply size={14} className="text-primary mt-0.5 flex-shrink-0" />
         <div className="flex-1 min-w-0">
-          <p className="text-xs text-primary font-medium">
-            {getReplySenderName()}
-          </p>
-          <p className="text-xs text-zinc-400 truncate">
-            {getPreviewText()}
-          </p>
+          <p className="text-xs text-primary font-medium">{senderName}</p>
+          <p className="text-xs text-zinc-400 truncate">{previewText}</p>
         </div>
       </div>
     );
@@ -300,11 +194,13 @@ const ChatContainer = () => {
   };
 
   if (isMessagesLoading) {
-    return <div className='flex-1 flex flex-col overflow-auto'>
-      <ChatHeader />
-      <MessageSkeleton />
-      <MessageInput />
-    </div>
+    return (
+      <div className="flex-1 flex flex-col overflow-auto">
+        <ChatHeader />
+        <MessageSkeleton />
+        <MessageInput />
+      </div>
+    );
   }
 
   // Get contact for avatar display
@@ -320,133 +216,104 @@ const ChatContainer = () => {
       <ChatHeader />
 
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
-        {messages.map((message) => {
-          const senderId = message.senderId?._id || message.senderId;
-          const isOwnMessage = senderId === authUser._id || senderId === authUser._id.toString();
-          
-          return (
-            <div
-              key={message._id}
-              className={`chat ${isOwnMessage ? 'chat-end' : 'chat-start'}`}
-              ref={messagesEndRef}
-            >
-              <div className='chat-image avatar'>
-                <div className='size-10 rounded-full border'>
-                  <img src={isOwnMessage ? authUser.profilePic || '/avatar.png' : getSenderAvatar(message)} alt="profile Pic" />
-                </div>
+        {messages.map((message, index) => (
+          <div
+            key={message._id}
+            className={`chat ${
+              normalizeId(message.senderId) === normalizeId(authUser._id) ? "chat-end" : "chat-start"
+            }`}
+            ref={index === messages.length - 1 ? messagesEndRef : null}
+          >
+            <div className="chat-image avatar">
+              <div className="size-10 rounded-full border">
+                <img
+                  src={
+                    normalizeId(message.senderId) === normalizeId(authUser._id)
+                      ? authUser.profilePic || "/avatar.png"
+                      : selectedUser.profilePic || "/avatar.png"
+                  }
+                  alt="profile Pic"
+                />
               </div>
-              <div className='chat-header mb-1 flex items-center gap-2'>
-                {!isGroup && <time className='text-xs opacity-50'>{formatMessageTime(message.createdAt)}</time>}
-                {isGroup && !isOwnMessage && (
-                  <span className="text-xs font-medium text-primary">{getSenderName(message)}</span>
-                )}
-                {isGroup && <time className='text-xs opacity-50'>{formatMessageTime(message.createdAt)}</time>}
-                {!isGroup && isOwnMessage && renderMessageStatus(message.status)}
-              </div>
-              <div className="chat-bubble flex flex-col relative group">
-                {/* Reply preview if this message is a reply */}
-                {message.replyTo && renderReplyPreview(message.replyTo)}
-                
-                {message.image && (
-                  <img src={message.image} alt="message attachment" className="sm:max-w-[200px] rounded-md mb-2" />
-                )}
-                {message.pdf && (
-                  <a 
-                    href={message.pdf} 
-                    target="_blank" 
-                    rel="noopener noreferrer"
-                    className="flex items-center gap-2 p-2 rounded-lg border border-zinc-600 hover:bg-zinc-700 transition-colors mb-2 max-w-[200px]"
-                  >
-                    <FileText size={24} className="text-red-500 flex-shrink-0" />
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm text-zinc-200 truncate">{getFileName(message.pdf)}</p>
-                      <p className="text-xs text-zinc-400">Document</p>
-                    </div>
-                    <Download size={16} className="text-zinc-400 flex-shrink-0" />
-                  </a>
-                )}
-                {message.audio && renderAudioPlayer(message)}
-                {message.text && !isMessageDeleted(message) && <p>{message.text}</p>}
-                
-                {isMessageDeleted(message) && (
-                  <p className="text-sm text-zinc-400 italic">This message was deleted</p>
-                )}
-              
-                {!isMessageDeleted(message) && (
-                  <div className="absolute -bottom-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1">
-                    {isOwnMessage && (
-                      <button
-                        onClick={() => handleDeleteMessage(message._id)}
-                        className="btn btn-circle btn-ghost btn-xs text-zinc-400 hover:text-red-500"
-                        title="Delete for everyone"
-                      >
-                        <Trash2 size={14} />
-                      </button>
-                    )}
-                    <button
-                      onClick={() => handleReply(message)}
-                      className="btn btn-circle btn-ghost btn-xs text-zinc-400 hover:text-primary"
-                      title="Reply"
-                    >
-                      <Reply size={14} />
-                    </button>
-                    <EmojiPicker 
-                      onSelect={(emoji) => handleAddReaction(message._id, emoji)} 
-                    />
-                  </div>
-                )}
-              </div>
-            
-              {message.reactions && message.reactions.length > 0 && (
-                <div className="flex items-center gap-1 mt-1 flex-wrap">
-                  {groupReactions(message.reactions).map((group, idx) => (
-                    <button
-                      key={idx}
-                      onClick={() => {
-                        if (hasUserReacted(message.reactions, group.emoji)) {
-                          handleRemoveReaction(message._id, group.emoji);
-                        } else {
-                          handleAddReaction(message._id, group.emoji);
-                        }
-                      }}
-                      className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-xs border ${
-                        hasUserReacted(message.reactions, group.emoji)
-                          ? 'bg-blue-500/20 border-blue-500'
-                          : 'bg-zinc-700/50 border-zinc-600'
-                      } hover:bg-zinc-600 transition-colors`}
-                    >
-                      <span>{group.emoji}</span>
-                      <span className="text-zinc-300">{group.count}</span>
-                    </button>
-                  ))}
-                </div>
-              )}
             </div>
-          );
-        })}
+            <div className="chat-header mb-1 flex items-center">
+              <time className="text-xs opacity-50 ml-1">{formatMessageTime(message.createdAt)}</time>
+              {normalizeId(message.senderId) === normalizeId(authUser._id) &&
+                renderMessageStatus(message.status)}
+            </div>
 
-        {/* Typing Indicator */}
-        {isUserTyping && (
-          <div className="chat chat-start">
-            <div className='chat-image avatar'>
-              <div className='size-10 rounded-full border'>
-                <img src={getContactAvatar()} alt="profile Pic" />
+            <div className="chat-bubble flex flex-col relative group">
+              {message.replyTo && renderReplyPreview(message.replyTo)}
+
+              {message.image && (
+                <img
+                  src={message.image}
+                  alt="message attachment"
+                  className="sm:max-w-[200px] rounded-md mb-2"
+                />
+              )}
+
+              {message.pdf && (
+                <a
+                  href={message.pdf}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-2 p-2 rounded-lg border border-zinc-600 hover:bg-zinc-700 transition-colors mb-2 max-w-[200px]"
+                >
+                  <FileText size={24} className="text-red-500 flex-shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm text-zinc-200 truncate">{getFileName(message.pdf)}</p>
+                    <p className="text-xs text-zinc-400">Document</p>
+                  </div>
+                  <Download size={16} className="text-zinc-400 flex-shrink-0" />
+                </a>
+              )}
+
+              {message.text && <p>{message.text}</p>}
+
+              <div className="absolute -bottom-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1">
+                <button
+                  onClick={() => setReplyingTo(message)}
+                  className="btn btn-circle btn-ghost btn-xs text-zinc-400 hover:text-primary"
+                  title="Reply"
+                >
+                  <Reply size={14} />
+                </button>
+                <EmojiPicker onSelect={(emoji) => addReaction(message._id, emoji)} />
               </div>
             </div>
-            <div className="chat-bubble">
-              <div className="flex gap-1">
-                <span className="w-2 h-2 bg-zinc-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></span>
-                <span className="w-2 h-2 bg-zinc-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></span>
-                <span className="w-2 h-2 bg-zinc-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></span>
+
+            {message.reactions && message.reactions.length > 0 && (
+              <div className="flex items-center gap-1 mt-1 flex-wrap">
+                {groupReactions(message.reactions).map((group, index) => (
+                  <button
+                    key={index}
+                    onClick={() => {
+                      if (hasUserReacted(message.reactions, group.emoji)) {
+                        removeReaction(message._id, group.emoji);
+                      } else {
+                        addReaction(message._id, group.emoji);
+                      }
+                    }}
+                    className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-xs border ${
+                      hasUserReacted(message.reactions, group.emoji)
+                        ? "bg-blue-500/20 border-blue-500"
+                        : "bg-zinc-700/50 border-zinc-600"
+                    } hover:bg-zinc-600 transition-colors`}
+                  >
+                    <span>{group.emoji}</span>
+                    <span className="text-zinc-300">{group.count}</span>
+                  </button>
+                ))}
               </div>
-            </div>
+            )}
           </div>
-        )}
+        ))}
       </div>
 
       <MessageInput />
     </div>
-  )
-}
+  );
+};
 
-export default ChatContainer
+export default ChatContainer;

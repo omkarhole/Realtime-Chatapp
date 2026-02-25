@@ -1,383 +1,446 @@
-import User from "../models/user.model.js";
-import Message from "../models/message.model.js";
-import { uploadImage, uploadPdf, uploadAudio } from "../lib/cloudinaryUpload.js";
+import mongoose from "mongoose";
+import cloudinary from "../lib/cloudinary.js";
+import { createRoomKey } from "../lib/conversation.js";
 import { getReciverSocketId, io } from "../lib/socket.js";
+import Conversation from "../models/conversation.model.js";
+import Message from "../models/message.model.js";
+import User from "../models/user.model.js";
+
+const escapeRegex = (value = "") => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+const findConversationByUsers = async (firstUserId, secondUserId) => {
+  const roomKey = createRoomKey(firstUserId, secondUserId);
+  return Conversation.findOne({ roomKey });
+};
+
+const attachLegacyMessagesToConversation = async (firstUserId, secondUserId, conversationId) => {
+  await Message.updateMany(
+    {
+      $and: [
+        {
+          $or: [
+            { senderId: firstUserId, receiverId: secondUserId },
+            { senderId: secondUserId, receiverId: firstUserId },
+          ],
+        },
+        {
+          $or: [{ conversationId: { $exists: false } }, { conversationId: null }],
+        },
+      ],
+    },
+    { $set: { conversationId } }
+  );
+};
+
+const ensureConversationForPair = async (firstUserId, secondUserId) => {
+  const roomKey = createRoomKey(firstUserId, secondUserId);
+  let conversation = await Conversation.findOne({ roomKey });
+  if (conversation) return conversation;
+
+  const latestLegacyMessage = await Message.findOne({
+    $or: [
+      { senderId: firstUserId, receiverId: secondUserId },
+      { senderId: secondUserId, receiverId: firstUserId },
+    ],
+  }).sort({ createdAt: -1 });
+
+  if (!latestLegacyMessage) return null;
+
+  conversation = await Conversation.create({
+    participants: [firstUserId, secondUserId],
+    roomKey,
+    lastMessage: latestLegacyMessage._id,
+    lastMessageAt: latestLegacyMessage.createdAt,
+  });
+
+  await attachLegacyMessagesToConversation(firstUserId, secondUserId, conversation._id);
+  return conversation;
+};
 
 // get all users except logged in user for sidebar
 export const getUsersForSidebar = async (req, res) => {
-    try {
-        const loggedInUserId = req.user._id;
-        const filterUsers = await User.find({ _id: { $ne: loggedInUserId } }).select("-password");
+  try {
+    const loggedInUserId = req.user._id.toString();
+    const loggedInObjectId = new mongoose.Types.ObjectId(loggedInUserId);
+    const searchQuery = req.query.q?.trim();
+    const isSearchMode = req.query.search === "true";
 
-        res.status(200).json({ filterUsers })
+    if (isSearchMode && searchQuery) {
+      const query = {
+        _id: { $ne: loggedInObjectId },
+      };
 
+      const safeQuery = escapeRegex(searchQuery);
+      query.$or = [
+        { username: { $regex: safeQuery, $options: "i" } },
+        { email: { $regex: safeQuery, $options: "i" } },
+        { fullName: { $regex: safeQuery, $options: "i" } },
+      ];
+
+      const filterUsers = await User.find(query)
+        .select("-password -verifyOtp -verifyOtpExpairy")
+        .sort({ fullName: 1 })
+        .limit(30);
+
+      return res.status(200).json({ filterUsers });
     }
-    catch (err) {
-        console.error("Error fetching users for sidebar:", err);
-        res.status(500).json({ message: "Internal Server Error" })
+
+    const conversationPartners = await Conversation.aggregate([
+      { $match: { participants: loggedInObjectId } },
+      { $sort: { lastMessageAt: -1 } },
+      {
+        $project: {
+          partnerId: {
+            $arrayElemAt: [
+              {
+                $filter: {
+                  input: "$participants",
+                  as: "participant",
+                  cond: { $ne: ["$$participant", loggedInObjectId] },
+                },
+              },
+              0,
+            ],
+          },
+          lastMessageAt: 1,
+        },
+      },
+      { $match: { partnerId: { $ne: null } } },
+    ]);
+
+    const legacyConversationPartners = await Message.aggregate([
+      {
+        $match: {
+          conversationId: null,
+          $or: [{ senderId: loggedInObjectId }, { receiverId: loggedInObjectId }],
+        },
+      },
+      { $sort: { createdAt: -1 } },
+      {
+        $project: {
+          partnerId: {
+            $cond: [{ $eq: ["$senderId", loggedInObjectId] }, "$receiverId", "$senderId"],
+          },
+          lastMessageAt: "$createdAt",
+        },
+      },
+      {
+        $group: {
+          _id: "$partnerId",
+          lastMessageAt: { $first: "$lastMessageAt" },
+        },
+      },
+      { $project: { partnerId: "$_id", lastMessageAt: 1, _id: 0 } },
+    ]);
+
+    const mergedMap = new Map();
+    [...conversationPartners, ...legacyConversationPartners].forEach((item) => {
+      const partnerId = item.partnerId?.toString?.();
+      if (!partnerId) return;
+      const previous = mergedMap.get(partnerId);
+      if (!previous || new Date(item.lastMessageAt) > new Date(previous.lastMessageAt)) {
+        mergedMap.set(partnerId, { partnerId, lastMessageAt: item.lastMessageAt });
+      }
+    });
+
+    const orderedPartnerIds = Array.from(mergedMap.values())
+      .sort((a, b) => new Date(b.lastMessageAt) - new Date(a.lastMessageAt))
+      .map((item) => item.partnerId);
+
+    if (orderedPartnerIds.length === 0) {
+      return res.status(200).json({ filterUsers: [] });
     }
-}
 
+    const users = await User.find({
+      _id: { $in: orderedPartnerIds },
+    }).select("-password -verifyOtp -verifyOtpExpairy");
 
-// get messages between two diff users( logged in user and user to chat)
+    const userMap = new Map(users.map((user) => [user._id.toString(), user]));
+    const filterUsers = orderedPartnerIds.map((id) => userMap.get(id)).filter(Boolean);
+
+    return res.status(200).json({ filterUsers });
+  } catch (err) {
+    console.error("Error fetching users for sidebar:", err);
+    return res.status(500).json({ message: "Internal Server Error" });
+  }
+};
+
+// get messages between two users
 export const getMessage = async (req, res) => {
-    try {
-        const { id: userToChatId } = req.params;
-        const myId = req.user._id;
+  try {
+    const userToChatId = req.params.id?.toString();
+    const myId = req.user._id.toString();
 
-        const messages = await Message.find({
-            $or: [
-                { senderId: myId, receiverId: userToChatId },
-                { senderId: userToChatId, receiverId: myId }
-            ]
-        })
-
-        res.status(200).json(messages);
-
+    let conversation = await findConversationByUsers(myId, userToChatId);
+    if (!conversation) {
+      conversation = await ensureConversationForPair(myId, userToChatId);
     }
-    catch (err) {
-        console.error("Error fetching messages:", err);
-        res.status(500).json({ message: "Internal Server Error" })
+
+    if (!conversation) {
+      return res.status(200).json([]);
     }
-}
+
+    const messages = await Message.find({ conversationId: conversation._id })
+      .sort({ createdAt: 1 })
+      .populate("senderId", "fullName profilePic username")
+      .populate("receiverId", "fullName profilePic username");
+
+    return res.status(200).json(messages);
+  } catch (err) {
+    console.error("Error fetching messages:", err);
+    return res.status(500).json({ message: "Internal Server Error" });
+  }
+};
 
 export const sendMessage = async (req, res) => {
-    try {
-        const { text, image, pdf, audio, audioDuration, replyTo } = req.body;
-        const { id: receiverId } = req.params;
-        const senderId = req.user._id;
+  try {
+    const { text, image, pdf, replyTo } = req.body;
+    const receiverId = req.params.id?.toString();
+    const senderId = req.user._id.toString();
+    const trimmedText = text?.trim();
 
-        // Upload files to Cloudinary
-        const imageUrl = await uploadImage(image);
-        const pdfUrl = await uploadPdf(pdf);
-        const audioUrl = await uploadAudio(audio);
-
-        const newMessage = new Message({
-            senderId,
-            receiverId,
-            text,
-            image: imageUrl,
-            pdf: pdfUrl,
-            audio: audioUrl,
-            audioDuration: audioDuration || 0,
-            replyTo: replyTo || null
-        });
-        await newMessage.save();
-        
-        //   realtime chat using socket.io
-        const reciverSocketId = getReciverSocketId(receiverId);
-        if (reciverSocketId) {
-            // sending new msg in realtime to reciver 
-            io.to(reciverSocketId).emit("newMessage", newMessage);
-        }
-        res.status(201).json(newMessage);
-
-    }
-    catch (err) {
-        console.error("Error sending message:", err);
-        res.status(500).json({ message: "Internal Server Error" })
+    if (!trimmedText && !image && !pdf) {
+      return res.status(400).json({ message: "Message content is required" });
     }
 
-}
+    if (senderId === receiverId) {
+      return res.status(400).json({ message: "Cannot send message to yourself" });
+    }
+
+    const receiverExists = await User.exists({ _id: receiverId });
+    if (!receiverExists) {
+      return res.status(404).json({ message: "Receiver not found" });
+    }
+
+    let conversation = await findConversationByUsers(senderId, receiverId);
+    if (!conversation) {
+      conversation = await Conversation.create({
+        participants: [senderId, receiverId],
+        roomKey: createRoomKey(senderId, receiverId),
+      });
+    }
+
+    let imageUrl;
+    let pdfUrl;
+
+    if (image) {
+      const uploadResponse = await cloudinary.uploader.upload(image);
+      imageUrl = uploadResponse.secure_url;
+    }
+
+    if (pdf) {
+      const uploadResponse = await cloudinary.uploader.upload(pdf, { resource_type: "raw" });
+      pdfUrl = uploadResponse.secure_url;
+    }
+
+    const newMessage = await Message.create({
+      conversationId: conversation._id,
+      senderId,
+      receiverId,
+      text: trimmedText || "",
+      image: imageUrl,
+      pdf: pdfUrl,
+      replyTo: replyTo || null,
+    });
+
+    await Conversation.findByIdAndUpdate(conversation._id, {
+      lastMessage: newMessage._id,
+      lastMessageAt: newMessage.createdAt,
+    });
+
+    const populatedMessage = await Message.findById(newMessage._id)
+      .populate("senderId", "fullName profilePic username")
+      .populate("receiverId", "fullName profilePic username");
+
+    // Emit once per user room to avoid duplicate events from room + direct socket emits.
+    io.to(`user:${senderId}`).emit("newMessage", populatedMessage);
+    io.to(`user:${receiverId}`).emit("newMessage", populatedMessage);
+
+    return res.status(201).json(populatedMessage);
+  } catch (err) {
+    console.error("Error sending message:", err);
+    return res.status(500).json({ message: "Internal Server Error" });
+  }
+};
 
 // Mark messages as read
 export const markMessageAsRead = async (req, res) => {
-    try {
-        const { senderId } = req.params; // senderId is the user whose messages we want to mark as read
-        const receiverId = req.user._id; // current logged in user is the receiver
+  try {
+    const { senderId } = req.params;
+    const receiverId = req.user._id;
 
-        // Update all messages from sender to receiver that are not yet read
-        const updatedMessages = await Message.updateMany(
-            { senderId, receiverId, status: { $ne: 'read' } },
-            { $set: { status: 'read' } }
-        );
+    const updatedMessages = await Message.updateMany(
+      { senderId, receiverId, status: { $ne: "read" } },
+      { $set: { status: "read" } }
+    );
 
-        // Notify the sender that their messages have been read
-        const senderSocketId = getReciverSocketId(senderId);
-        if (senderSocketId) {
-            io.to(senderSocketId).emit("messageRead", {
-                readerId: receiverId,
-                messageIds: updatedMessages.modifiedCount
-            });
-        }
-
-        res.status(200).json({ 
-            message: "Messages marked as read",
-            count: updatedMessages.modifiedCount 
-        });
-
+    const senderSocketId = getReciverSocketId(senderId);
+    if (senderSocketId) {
+      io.to(senderSocketId).emit("messageRead", {
+        readerId: receiverId,
+        messageIds: updatedMessages.modifiedCount,
+      });
     }
-    catch (err) {
-        console.error("Error marking messages as read:", err);
-        res.status(500).json({ message: "Internal Server Error" })
-    }
-}
+
+    return res.status(200).json({
+      message: "Messages marked as read",
+      count: updatedMessages.modifiedCount,
+    });
+  } catch (err) {
+    console.error("Error marking messages as read:", err);
+    return res.status(500).json({ message: "Internal Server Error" });
+  }
+};
 
 // Search messages by text content
 export const searchMessages = async (req, res) => {
-    try {
-        const { q: searchQuery } = req.query;
-        const userId = req.user._id;
+  try {
+    const { q: searchQuery } = req.query;
+    const userId = req.user._id;
 
-        if (!searchQuery || searchQuery.trim() === "") {
-            return res.status(400).json({ message: "Search query is required" });
-        }
-
-        // Search for messages where the user is either sender or receiver
-        // and the text contains the search query (case-insensitive)
-        const messages = await Message.find({
-            $or: [
-                { senderId: userId },
-                { receiverId: userId }
-            ],
-            text: { $regex: searchQuery, $options: 'i' }
-        })
-        .populate('senderId', 'fullName profilePic')
-        .populate('receiverId', 'fullName profilePic')
-        .sort({ createdAt: -1 }) // Most recent first
-        .limit(50); // Limit results to 50 messages
-
-        res.status(200).json(messages);
-
+    if (!searchQuery || searchQuery.trim() === "") {
+      return res.status(400).json({ message: "Search query is required" });
     }
-    catch (err) {
-        console.error("Error searching messages:", err);
-        res.status(500).json({ message: "Internal Server Error" })
-    }
-}
+
+    const messages = await Message.find({
+      $or: [{ senderId: userId }, { receiverId: userId }],
+      text: { $regex: searchQuery, $options: "i" },
+    })
+      .populate("senderId", "fullName profilePic")
+      .populate("receiverId", "fullName profilePic")
+      .sort({ createdAt: -1 })
+      .limit(50);
+
+    return res.status(200).json(messages);
+  } catch (err) {
+    console.error("Error searching messages:", err);
+    return res.status(500).json({ message: "Internal Server Error" });
+  }
+};
 
 // Export all messages for the logged-in user
 export const getAllMessages = async (req, res) => {
-    try {
-        const userId = req.user._id;
+  try {
+    const userId = req.user._id;
 
-        // Get all messages where user is either sender or receiver
-        const messages = await Message.find({
-            $or: [
-                { senderId: userId },
-                { receiverId: userId }
-            ]
-        })
-        .populate('senderId', 'fullName profilePic')
-        .populate('receiverId', 'fullName profilePic')
-        .sort({ createdAt: 1 }); // Oldest first for export
+    const messages = await Message.find({
+      $or: [{ senderId: userId }, { receiverId: userId }],
+    })
+      .populate("senderId", "fullName profilePic")
+      .populate("receiverId", "fullName profilePic")
+      .sort({ createdAt: 1 });
 
-        res.status(200).json(messages);
-
-    }
-    catch (err) {
-        console.error("Error exporting messages:", err);
-        res.status(500).json({ message: "Internal Server Error" })
-    }
-}
+    return res.status(200).json(messages);
+  } catch (err) {
+    console.error("Error exporting messages:", err);
+    return res.status(500).json({ message: "Internal Server Error" });
+  }
+};
 
 // Add reaction to a message
 export const addReaction = async (req, res) => {
-    try {
-        const { messageId } = req.params;
-        const { emoji } = req.body;
-        const userId = req.user._id;
+  try {
+    const { messageId } = req.params;
+    const { emoji } = req.body;
+    const userId = req.user._id;
 
-        if (!emoji) {
-            return res.status(400).json({ message: "Emoji is required" });
-        }
-
-        const message = await Message.findById(messageId);
-        
-        if (!message) {
-            return res.status(404).json({ message: "Message not found" });
-        }
-
-        // Check if user already reacted with this emoji
-        const existingReaction = message.reactions.find(
-            r => r.userId.toString() === userId.toString() && r.emoji === emoji
-        );
-
-        if (existingReaction) {
-            return res.status(400).json({ message: "Reaction already exists" });
-        }
-
-        // Remove any existing reaction from this user first (if they want to change emoji)
-        message.reactions = message.reactions.filter(
-            r => r.userId.toString() !== userId.toString()
-        );
-
-        // Add new reaction
-        message.reactions.push({
-            userId,
-            emoji
-        });
-
-        await message.save();
-
-        // Populate user details for the new reaction
-        await message.populate('reactions.userId', 'fullName profilePic');
-
-        // Get the updated message with populated reaction user
-        const updatedMessage = await Message.findById(messageId)
-            .populate('senderId', 'fullName profilePic')
-            .populate('receiverId', 'fullName profilePic')
-            .populate('reactions.userId', 'fullName profilePic');
-
-        // Notify sender and receiver about the reaction via socket
-        const senderSocketId = getReciverSocketId(message.senderId);
-        const receiverSocketId = getReciverSocketId(message.receiverId);
-
-        const reactionData = {
-            messageId,
-            reaction: {
-                userId,
-                emoji,
-                user: req.user
-            }
-        };
-
-        if (senderSocketId) {
-            io.to(senderSocketId).emit("reactionAdded", reactionData);
-        }
-        if (receiverSocketId) {
-            io.to(receiverSocketId).emit("reactionAdded", reactionData);
-        }
-
-        res.status(200).json(updatedMessage);
-
+    if (!emoji) {
+      return res.status(400).json({ message: "Emoji is required" });
     }
-    catch (err) {
-        console.error("Error adding reaction:", err);
-        res.status(500).json({ message: "Internal Server Error" })
+
+    const message = await Message.findById(messageId);
+    if (!message) {
+      return res.status(404).json({ message: "Message not found" });
     }
-}
+
+    const existingReaction = message.reactions.find(
+      (reaction) => reaction.userId.toString() === userId.toString() && reaction.emoji === emoji
+    );
+
+    if (existingReaction) {
+      return res.status(400).json({ message: "Reaction already exists" });
+    }
+
+    message.reactions = message.reactions.filter(
+      (reaction) => reaction.userId.toString() !== userId.toString()
+    );
+
+    message.reactions.push({ userId, emoji });
+    await message.save();
+    await message.populate("reactions.userId", "fullName profilePic");
+
+    const updatedMessage = await Message.findById(messageId)
+      .populate("senderId", "fullName profilePic")
+      .populate("receiverId", "fullName profilePic")
+      .populate("reactions.userId", "fullName profilePic");
+
+    const senderSocketId = getReciverSocketId(message.senderId);
+    const receiverSocketId = getReciverSocketId(message.receiverId);
+
+    const reactionData = {
+      messageId,
+      reaction: {
+        userId,
+        emoji,
+        user: req.user,
+      },
+    };
+
+    if (senderSocketId) io.to(senderSocketId).emit("reactionAdded", reactionData);
+    if (receiverSocketId) io.to(receiverSocketId).emit("reactionAdded", reactionData);
+
+    return res.status(200).json(updatedMessage);
+  } catch (err) {
+    console.error("Error adding reaction:", err);
+    return res.status(500).json({ message: "Internal Server Error" });
+  }
+};
 
 // Remove reaction from a message
 export const removeReaction = async (req, res) => {
-    try {
-        const { messageId } = req.params;
-        const { emoji } = req.body;
-        const userId = req.user._id;
+  try {
+    const { messageId } = req.params;
+    const { emoji } = req.body;
+    const userId = req.user._id;
 
-        const message = await Message.findById(messageId);
-        
-        if (!message) {
-            return res.status(404).json({ message: "Message not found" });
-        }
-
-        // Check if user has reacted with this emoji
-        const existingReaction = message.reactions.find(
-            r => r.userId.toString() === userId.toString() && r.emoji === emoji
-        );
-
-        if (!existingReaction) {
-            return res.status(400).json({ message: "Reaction not found" });
-        }
-
-        // Remove the reaction
-        message.reactions = message.reactions.filter(
-            r => !(r.userId.toString() === userId.toString() && r.emoji === emoji)
-        );
-
-        await message.save();
-
-        // Get the updated message
-        const updatedMessage = await Message.findById(messageId)
-            .populate('senderId', 'fullName profilePic')
-            .populate('receiverId', 'fullName profilePic')
-            .populate('reactions.userId', 'fullName profilePic');
-
-        // Notify sender and receiver about the removed reaction via socket
-        const senderSocketId = getReciverSocketId(message.senderId);
-        const receiverSocketId = getReciverSocketId(message.receiverId);
-
-        const reactionData = {
-            messageId,
-            reaction: {
-                userId,
-                emoji
-            }
-        };
-
-        if (senderSocketId) {
-            io.to(senderSocketId).emit("reactionRemoved", reactionData);
-        }
-        if (receiverSocketId) {
-            io.to(receiverSocketId).emit("reactionRemoved", reactionData);
-        }
-
-        res.status(200).json(updatedMessage);
-
+    const message = await Message.findById(messageId);
+    if (!message) {
+      return res.status(404).json({ message: "Message not found" });
     }
-    catch (err) {
-        console.error("Error removing reaction:", err);
-        res.status(500).json({ message: "Internal Server Error" })
+
+    const existingReaction = message.reactions.find(
+      (reaction) => reaction.userId.toString() === userId.toString() && reaction.emoji === emoji
+    );
+
+    if (!existingReaction) {
+      return res.status(400).json({ message: "Reaction not found" });
     }
-}
 
-// Delete message for everyone
-export const deleteMessage = async (req, res) => {
-    try {
-        const { messageId } = req.params;
-        const userId = req.user._id;
+    message.reactions = message.reactions.filter(
+      (reaction) => !(reaction.userId.toString() === userId.toString() && reaction.emoji === emoji)
+    );
 
-        const message = await Message.findById(messageId);
-        
-        if (!message) {
-            return res.status(404).json({ message: "Message not found" });
-        }
+    await message.save();
 
-        // Check if user is the sender
-        if (message.senderId.toString() !== userId.toString()) {
-            return res.status(403).json({ message: "You can only delete your own messages" });
-        }
+    const updatedMessage = await Message.findById(messageId)
+      .populate("senderId", "fullName profilePic")
+      .populate("receiverId", "fullName profilePic")
+      .populate("reactions.userId", "fullName profilePic");
 
-        // Check if 24 hours have passed since message creation
-        const messageAge = Date.now() - message.createdAt.getTime();
-        const twentyFourHours = 24 * 60 * 60 * 1000; // 24 hours in milliseconds
-        
-        if (messageAge > twentyFourHours) {
-            return res.status(400).json({ message: "You can only delete messages within 24 hours" });
-        }
+    const senderSocketId = getReciverSocketId(message.senderId);
+    const receiverSocketId = getReciverSocketId(message.receiverId);
 
-        // Check if already deleted for everyone (both sender and receiver)
-        const senderDeleted = message.deletedFor.some(id => id.toString() === userId.toString());
-        const receiverDeleted = message.deletedFor.some(id => id.toString() === message.receiverId.toString());
+    const reactionData = {
+      messageId,
+      reaction: { userId, emoji },
+    };
 
-        if (senderDeleted && receiverDeleted) {
-            return res.status(400).json({ message: "Message already deleted for everyone" });
-        }
+    if (senderSocketId) io.to(senderSocketId).emit("reactionRemoved", reactionData);
+    if (receiverSocketId) io.to(receiverSocketId).emit("reactionRemoved", reactionData);
 
-        // Add both sender and receiver to deletedFor array (soft delete for both)
-        if (!senderDeleted) {
-            message.deletedFor.push(userId);
-        }
-        if (!receiverDeleted) {
-            message.deletedFor.push(message.receiverId);
-        }
-
-        await message.save();
-
-        // Notify both users via socket
-        const senderSocketId = getReciverSocketId(message.senderId);
-        const receiverSocketId = getReciverSocketId(message.receiverId);
-
-        const deletionData = {
-            messageId,
-            deletedFor: message.deletedFor
-        };
-
-        if (senderSocketId) {
-            io.to(senderSocketId).emit("messageDeleted", deletionData);
-        }
-        if (receiverSocketId) {
-            io.to(receiverSocketId).emit("messageDeleted", deletionData);
-        }
-
-        res.status(200).json({ 
-            message: "Message deleted for everyone",
-            deletedFor: message.deletedFor
-        });
-
-    }
-    catch (err) {
-        console.error("Error deleting message:", err);
-        res.status(500).json({ message: "Internal Server Error" })
-    }
-}
+    return res.status(200).json(updatedMessage);
+  } catch (err) {
+    console.error("Error removing reaction:", err);
+    return res.status(500).json({ message: "Internal Server Error" });
+  }
+};
