@@ -1,7 +1,7 @@
 import Group from "../models/group.model.js";
 import Message from "../models/message.model.js";
 import User from "../models/user.model.js";
-import cloudinary from "../lib/cloudinary.js";
+import { uploadImage, uploadPdf, uploadAudio, uploadAvatar } from "../lib/cloudinaryUpload.js";
 import { io } from "../lib/socket.js";
 
 // Create a new group
@@ -21,13 +21,8 @@ export const createGroup = async (req, res) => {
         // Add admin to members if not already included
         const allMembers = [...new Set([adminId.toString(), ...members])];
 
-        let avatarUrl = "";
-        if (avatar) {
-            const uploadResponse = await cloudinary.uploader.upload(avatar, {
-                folder: "group_avatars"
-            });
-            avatarUrl = uploadResponse.secure_url;
-        }
+        // Upload avatar to Cloudinary
+        const avatarUrl = await uploadAvatar(avatar);
 
         const newGroup = new Group({
             name: name.trim(),
@@ -114,11 +109,10 @@ export const updateGroup = async (req, res) => {
             group.name = name.trim();
         }
 
-        if (avatar) {
-            const uploadResponse = await cloudinary.uploader.upload(avatar, {
-                folder: "group_avatars"
-            });
-            group.avatar = uploadResponse.secure_url;
+        // Upload avatar to Cloudinary
+        const newAvatarUrl = await uploadAvatar(avatar);
+        if (newAvatarUrl) {
+            group.avatar = newAvatarUrl;
         }
 
         await group.save();
@@ -329,26 +323,10 @@ export const sendGroupMessage = async (req, res) => {
             return res.status(403).json({ message: "You are not a member of this group" });
         }
 
-        let imageUrl, pdfUrl, audioUrl;
-
-        if (image) {
-            const uploadResponse = await cloudinary.uploader.upload(image);
-            imageUrl = uploadResponse.secure_url;
-        }
-
-        if (pdf) {
-            const uploadResponse = await cloudinary.uploader.upload(pdf, {
-                resource_type: "raw"
-            });
-            pdfUrl = uploadResponse.secure_url;
-        }
-
-        if (audio) {
-            const uploadResponse = await cloudinary.uploader.upload(audio, {
-                resource_type: "video"
-            });
-            audioUrl = uploadResponse.secure_url;
-        }
+        // Upload files to Cloudinary
+        const imageUrl = await uploadImage(image);
+        const pdfUrl = await uploadPdf(pdf);
+        const audioUrl = await uploadAudio(audio);
 
         const newMessage = new Message({
             senderId,
