@@ -2,6 +2,7 @@ import User from "../models/user.model.js";
 import Message from "../models/message.model.js";
 import { uploadImage, uploadPdf, uploadAudio } from "../lib/cloudinaryUpload.js";
 import { getReciverSocketId, io } from "../lib/socket.js";
+import { MESSAGE } from "../constants/index.js";
 
 // get all users except logged in user for sidebar
 export const getUsersForSidebar = async (req, res) => {
@@ -135,7 +136,7 @@ export const searchMessages = async (req, res) => {
         .populate('senderId', 'fullName profilePic')
         .populate('receiverId', 'fullName profilePic')
         .sort({ createdAt: -1 }) // Most recent first
-        .limit(50); // Limit results to 50 messages
+        .limit(MESSAGE.SEARCH_LIMIT);
 
         res.status(200).json(messages);
 
@@ -330,10 +331,9 @@ export const deleteMessage = async (req, res) => {
 
         // Check if 24 hours have passed since message creation
         const messageAge = Date.now() - message.createdAt.getTime();
-        const twentyFourHours = 24 * 60 * 60 * 1000; // 24 hours in milliseconds
         
-        if (messageAge > twentyFourHours) {
-            return res.status(400).json({ message: "You can only delete messages within 24 hours" });
+        if (messageAge > MESSAGE.DELETE_TIMEOUT_MS) {
+            return res.status(400).json({ message: `You can only delete messages within ${MESSAGE.DELETE_TIMEOUT_HOURS} hours` });
         }
 
         // Check if already deleted for everyone (both sender and receiver)

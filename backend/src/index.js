@@ -8,16 +8,17 @@ import authRoutes from "./routes/auth.route.js";
 import messageRoutes from "./routes/message.route.js";
 import groupRoutes from "./routes/group.route.js";
 import { app, server } from "./lib/socket.js";
+import { UPLOAD, SERVER } from "./constants/index.js";
 
 dotenv.config({ path: ".local.env" });
 
-app.use(express.json({ limit: "10mb" }));
+app.use(express.json({ limit: UPLOAD.JSON_LIMIT }));
 app.use(cookieParser());
 const __dirname = path.resolve();
 
 // CORS configuration for production
 const allowedOrigins = [
-  "http://localhost:5173",
+  SERVER.DEV_FRONTEND_URL,
   process.env.FRONTEND_URL
 ].filter(Boolean);
 
@@ -32,9 +33,7 @@ app.use(cors({
   credentials: true
 }));
 
-const PORT = process.env.PORT || 5001;
-
-
+const PORT = process.env.PORT || SERVER.DEFAULT_PORT;
 
 // auth routes 
 app.use("/api/auth",authRoutes)
@@ -58,7 +57,7 @@ app.get("/",(req,res)=>{
     res.send("hello from backend");
 })
 
-server.listen(PORT,()=>{
+server.listen(PORT, () => {
     console.log(`server is running on port ${PORT}`);
     connectDB()
 })

@@ -3,13 +3,14 @@ import http from "http";
 import express from "express";
 import jwt from "jsonwebtoken";
 import User from "../models/user.model.js";
+import { SERVER } from "../constants/index.js";
 
 const app = express();
 const server = http.createServer(app);
 
 // Socket.io CORS configuration for production
 const allowedOrigins = [
-  "http://localhost:5173",
+  SERVER.DEV_FRONTEND_URL,
   process.env.FRONTEND_URL
 ].filter(Boolean);
 
@@ -72,7 +73,7 @@ io.on("connection",(socket)=>{
     // io.emit() is used to send event to all connected clients
     io.emit("getOnlineUsers",Object.keys(userSocketMap));
 
-    socket.on("disconnect",()=>{
+    socket.on("disconnect",(){
         console.log("user disconnected",socket.id);
         delete userSocketMap[userId];
         
