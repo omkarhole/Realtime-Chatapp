@@ -48,10 +48,34 @@ export const sendMessage = async (req, res) => {
         const { id: receiverId } = req.params;
         const senderId = req.user._id;
 
-        // Upload files to Cloudinary
-        const imageUrl = await uploadImage(image);
-        const pdfUrl = await uploadPdf(pdf);
-        const audioUrl = await uploadAudio(audio);
+        // Validate receiver exists before starting uploads
+        const receiver = await User.findById(receiverId);
+        if (!receiver) {
+            return res.status(404).json({ message: "Receiver not found" });
+        }
+
+        // Upload files to Cloudinary with try-catch for each upload
+        let imageUrl = null;
+        let pdfUrl = null;
+        let audioUrl = null;
+
+        try {
+            imageUrl = image ? await uploadImage(image) : null;
+        } catch (imageError) {
+            console.error("Image upload failed:", imageError);
+        }
+
+        try {
+            pdfUrl = pdf ? await uploadPdf(pdf) : null;
+        } catch (pdfError) {
+            console.error("PDF upload failed:", pdfError);
+        }
+
+        try {
+            audioUrl = audio ? await uploadAudio(audio) : null;
+        } catch (audioError) {
+            console.error("Audio upload failed:", audioError);
+        }
 
         const newMessage = new Message({
             senderId,
