@@ -18,4 +18,8 @@ router.put("/update-profile", protectRoute, updateProfile);
 
 router.get("/check", protectRoute, checkAuth);
 
+// Status routes
+router.get("/users/online",protectRoute,getOnlineUsers);
+router.get("/users/:id/status",protectRoute,getUserStatus);
+
 export default router;
