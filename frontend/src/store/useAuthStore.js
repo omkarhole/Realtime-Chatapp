@@ -68,7 +68,7 @@ export const useAuthStore = create((set, get) => ({
 
     logout: async () => {
         try {
-            const logout = axiosInstance.post("auth/logout");
+            await axiosInstance.post("auth/logout");
             set({ authUser: null });
             toast.success("logged out successfully");
             get().disConnectSocket();
