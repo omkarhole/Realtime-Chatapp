@@ -105,6 +105,8 @@ cd frontend && npm run dev   # Terminal 2
 
 ## 🤝 Contributing
 
+Please see our [Contributing Guidelines](CONTRIBUTING.md) for details on how to get started.
+
 1. Fork → 2. Branch → 3. Commit → 4. PR
 
 ---
