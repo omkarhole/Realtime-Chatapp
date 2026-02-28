@@ -1,6 +1,6 @@
 import express from "express";
 import { protectRoute } from "../middleware/auth.middleware.js";
-import { getMessage, getUsersForSidebar, sendMessage, markMessageAsRead, searchMessages, getAllMessages, addReaction, removeReaction, deleteMessage } from "../controllers/message.controller.js";
+import { getMessage, getUsersForSidebar, sendMessage, markMessageAsRead, searchMessages, getAllMessages, addReaction, removeReaction, deleteMessage, toggleStarMessage, getStarredMessages } from "../controllers/message.controller.js";
 
 
 const router=express.Router();
@@ -11,6 +11,9 @@ router.get("/users",protectRoute,getUsersForSidebar)
 router.get("/search",protectRoute,searchMessages)
 
 router.get("/all",protectRoute,getAllMessages)
+
+// Starred messages route
+router.get("/starred", protectRoute, getStarredMessages)
 
 router.get("/:id",protectRoute,getMessage)
 
@@ -24,5 +27,8 @@ router.delete("/:messageId",protectRoute, deleteMessage)
 // Reaction routes
 router.post("/:messageId/reactions", protectRoute, addReaction)
 router.delete("/:messageId/reactions", protectRoute, removeReaction)
+
+// Star routes
+router.post("/:messageId/star", protectRoute, toggleStarMessage)
 
 export default router;

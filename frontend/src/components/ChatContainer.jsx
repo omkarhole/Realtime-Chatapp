@@ -1,5 +1,5 @@
 import React, { useEffect, useRef } from "react";
-import { FileText, Download, Reply } from "lucide-react";
+import { FileText, Download, Reply, Star } from "lucide-react";
 import { useChatStore } from "../store/useChatStore";
 import { useAuthStore } from "../store/useAuthStore";
 import { formatMessageTime } from "../lib/utils";
@@ -28,6 +28,7 @@ const ChatContainer = () => {
     addReaction,
     removeReaction,
     setReplyingTo,
+    toggleStarMessage,
   } = useChatStore();
 
   const { authUser, socket } = useAuthStore();
@@ -101,6 +102,11 @@ const ChatContainer = () => {
       (reaction) =>
         normalizeId(reaction.userId) === normalizeId(authUser._id) && reaction.emoji === emoji
     );
+
+  const isMessageStarred = (message) => {
+    if (!message?.starredBy) return false;
+    return message.starredBy.some(s => normalizeId(s) === normalizeId(authUser._id));
+  };
 
   const groupReactions = (reactions) => {
     if (!reactions || reactions.length === 0) return [];
@@ -280,6 +286,13 @@ const ChatContainer = () => {
                   <Reply size={14} />
                 </button>
                 <EmojiPicker onSelect={(emoji) => addReaction(message._id, emoji)} />
+                <button
+                  onClick={() => toggleStarMessage(message._id)}
+                  className={`btn btn-circle btn-ghost btn-xs ${isMessageStarred(message) ? "text-yellow-500" : "text-zinc-400 hover:text-yellow-500"}`}
+                  title={isMessageStarred(message) ? "Unstar" : "Star"}
+                >
+                  <Star size={14} fill={isMessageStarred(message) ? "currentColor" : "none"} />
+                </button>
               </div>
             </div>
 

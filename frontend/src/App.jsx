@@ -7,6 +7,7 @@ import ProfilePage from "./pages/ProfilePage"
 import HomePage from "./pages/HomePage";
 import ForgotPasswordPage from "./pages/ForgotPasswordPage";
 import ResetPasswordPage from "./pages/ResetPasswordPage";
+import StarredMessagesPage from "./pages/StarredMessagesPage";
 import { useAuthStore } from "./store/useAuthStore";
 import { useEffect } from "react";
 import { Loader } from "lucide-react"
@@ -52,6 +53,7 @@ const App = () => {
         <Route path='/reset-password' element={!authUser ? <ResetPasswordPage /> : <Navigate to="/" />} />
         <Route path='/Settings' element={<SettingsPage />} />
         <Route path='/Profile' element={authUser ? <ProfilePage /> : <Navigate to="/login" />} />
+        <Route path='/starred' element={authUser ? <StarredMessagesPage /> : <Navigate to="/login" />} />
       </Routes>
       <Toaster />
     </div>

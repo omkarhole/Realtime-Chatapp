@@ -68,6 +68,11 @@ const messageSchema=new mongoose.Schema({
         ref: "User",
         default: []
     }],
+    starredBy: [{
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "User",
+        default: []
+    }],
 
 },
 {timestamps:true}
