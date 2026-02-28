@@ -1,6 +1,12 @@
 import mongoose from "mongoose";
 
 const messageSchema=new mongoose.Schema({
+    conversationId:{
+        type:mongoose.Schema.Types.ObjectId,
+        ref:"Conversation",
+        default:null,
+        index:true,
+    },
     senderId:{
         type:mongoose.Schema.Types.ObjectId,
         ref:"User",
@@ -68,14 +74,9 @@ const messageSchema=new mongoose.Schema({
 
 );
 
-// Add compound indexes for common queries
-messageSchema.index({ senderId: 1, receiverId: 1, createdAt: -1 });
-messageSchema.index({ groupId: 1, createdAt: 1 });
-messageSchema.index({ senderId: 1, createdAt: -1 });
-messageSchema.index({ receiverId: 1, createdAt: -1 });
-
-// Text index for search functionality
-messageSchema.index({ text: 'text' });
+messageSchema.index({ conversationId: 1, createdAt: 1 });
+messageSchema.index({ senderId: 1, receiverId: 1, createdAt: 1 });
+messageSchema.index({ receiverId: 1, senderId: 1, status: 1 });
 
 const Message=mongoose.model("message",messageSchema);
 

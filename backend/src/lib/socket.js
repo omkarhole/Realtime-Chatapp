@@ -2,196 +2,195 @@ import { Server } from "socket.io";
 import http from "http";
 import express from "express";
 import jwt from "jsonwebtoken";
+import dotenv from "dotenv";
 import User from "../models/user.model.js";
-import { SERVER } from "../constants/index.js";
+import Conversation from "../models/conversation.model.js";
+import { createRoomKey } from "./conversation.js";
+
+dotenv.config({ path: ".local.env", quiet: true });
+dotenv.config({ path: ".env", quiet: true });
 
 const app = express();
 const server = http.createServer(app);
 
-// Socket.io CORS configuration for production
-const allowedOrigins = [
-  SERVER.DEV_FRONTEND_URL,
-  process.env.FRONTEND_URL
-].filter(Boolean);
+const isLocalOrigin = (origin = "") =>
+  /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/i.test(origin);
+
+const allowedOrigins = [process.env.FRONTEND_URL].filter(Boolean);
+
+const logSocketWarning = (message, error) => {
+  if (process.env.NODE_ENV !== "production") {
+    console.warn(message, error?.message || error);
+  }
+};
 
 const io = new Server(server, {
   cors: {
-    origin: allowedOrigins,
-    credentials: true
+    origin: (origin, callback) => {
+      if (!origin || isLocalOrigin(origin) || allowedOrigins.includes(origin)) {
+        callback(null, true);
+      } else {
+        callback(new Error("Not allowed by CORS"));
+      }
+    },
+    credentials: true,
+  },
+});
+
+const userSocketMap = new Map(); // userId -> Set(socketId)
+
+const getOnlineUserIds = () =>
+  Array.from(userSocketMap.entries())
+    .filter(([, socketSet]) => socketSet && socketSet.size > 0)
+    .map(([userId]) => userId);
+
+const addUserSocket = (userId, socketId) => {
+  if (!userId || !socketId) return;
+  const existingSet = userSocketMap.get(userId) || new Set();
+  existingSet.add(socketId);
+  userSocketMap.set(userId, existingSet);
+};
+
+const removeUserSocket = (userId, socketId) => {
+  if (!userId || !socketId) return;
+  const existingSet = userSocketMap.get(userId);
+  if (!existingSet) return;
+
+  existingSet.delete(socketId);
+  if (existingSet.size === 0) {
+    userSocketMap.delete(userId);
+  } else {
+    userSocketMap.set(userId, existingSet);
+  }
+};
+
+const getTokenFromCookieHeader = (cookieHeader = "") => {
+  if (!cookieHeader) return null;
+  const jwtCookie = cookieHeader
+    .split(";")
+    .map((cookie) => cookie.trim())
+    .find((cookie) => cookie.startsWith("jwt="));
+
+  if (!jwtCookie) return null;
+  return decodeURIComponent(jwtCookie.substring(4));
+};
+
+export function getReciverSocketId(reciverId) {
+  const sockets = userSocketMap.get(reciverId?.toString());
+  if (!sockets || sockets.size === 0) return null;
+  return Array.from(sockets)[0];
+}
+
+io.use(async (socket, next) => {
+  try {
+    const token =
+      socket.handshake.auth?.token ||
+      socket.handshake.query?.token ||
+      getTokenFromCookieHeader(socket.handshake.headers?.cookie);
+
+    if (!token) {
+      return next(new Error("Authentication error: No token provided"));
+    }
+
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    if (!decoded) {
+      return next(new Error("Authentication error: Invalid token"));
+    }
+
+    const user = await User.findById(decoded.userId).select("-password -verifyOtp -verifyOtpExpairy");
+    if (!user) {
+      return next(new Error("Authentication error: User not found"));
+    }
+
+    socket.user = user;
+    return next();
+  } catch (err) {
+    return next(new Error(`Authentication error: ${err.message}`));
   }
 });
 
-export function getReciverSocketId(reciverId){
-    return userSocketMap[reciverId];
-}
-// used to store onlin users 
-// as soon as user login we will add him to this map
-const userSocketMap={};  // userId : socketId (key :value)
+io.on("connection", (socket) => {
+  const userId = socket.user?._id?.toString() || socket.handshake.query.userId;
+  if (userId) {
+    addUserSocket(userId, socket.id);
+    socket.join(`user:${userId}`);
 
-// Socket authentication middleware
-io.use(async (socket, next) => {
-    try {
-        const token = socket.handshake.auth.token || socket.handshake.query.token;
-        
-        if (!token) {
-            return next(new Error("Authentication error: No token provided"));
-        }
+    Conversation.find({ participants: userId })
+      .select("roomKey")
+      .lean()
+      .then((conversations) => {
+        conversations.forEach((conversation) => {
+          socket.join(conversation.roomKey);
+        });
+      })
+      .catch((err) => {
+        logSocketWarning("Error joining existing conversation rooms:", err);
+      });
 
-        const decoded = jwt.verify(token, process.env.JWT_SECRET);
-        
-        if (!decoded) {
-            return next(new Error("Authentication error: Invalid token"));
-        }
+    User.findByIdAndUpdate(userId, { lastSeen: new Date() }).catch((err) => {
+      logSocketWarning("Error updating lastSeen on connect:", err);
+    });
+  }
 
-        const user = await User.findById(decoded.userId).select("-password");
-        
-        if (!user) {
-            return next(new Error("Authentication error: User not found"));
-        }
+  io.emit("getOnlineUsers", getOnlineUserIds());
 
-        // Attach user to socket for use in event handlers
-        socket.user = user;
-        next();
-    } catch (err) {
-        console.log("Socket authentication error:", err.message);
-        next(new Error("Authentication error: " + err.message));
+  socket.on("disconnect", () => {
+    removeUserSocket(userId, socket.id);
+
+    if (userId) {
+      User.findByIdAndUpdate(userId, { lastSeen: new Date() }).catch((err) => {
+        logSocketWarning("Error updating lastSeen on disconnect:", err);
+      });
     }
+
+    io.emit("getOnlineUsers", getOnlineUserIds());
+  });
+
+  socket.on("activity", () => {
+    if (!userId) return;
+    User.findByIdAndUpdate(userId, { lastSeen: new Date() }).catch((err) => {
+      logSocketWarning("Error updating lastSeen on activity:", err);
+    });
+  });
+
+  socket.on("joinConversation", ({ to }) => {
+    if (!userId || !to) return;
+    socket.join(createRoomKey(userId, to));
+  });
+
+  socket.on("leaveConversation", ({ to }) => {
+    if (!userId || !to) return;
+    socket.leave(createRoomKey(userId, to));
+  });
+
+  socket.on("markAsRead", ({ to }) => {
+    if (!to) return;
+    io.to(`user:${to}`).emit("messageRead", {
+      readerId: userId,
+      from: userId,
+      to,
+    });
+  });
+
+  socket.on("addReaction", ({ to, messageId, emoji }) => {
+    if (!to) return;
+    io.to(`user:${to}`).emit("reactionAdded", {
+      messageId,
+      reaction: { userId, emoji },
+      from: userId,
+      to,
+    });
+  });
+
+  socket.on("removeReaction", ({ to, messageId, emoji }) => {
+    if (!to) return;
+    io.to(`user:${to}`).emit("reactionRemoved", {
+      messageId,
+      reaction: { userId, emoji },
+      from: userId,
+      to,
+    });
+  });
 });
 
-io.on("connection",(socket)=>{
-    console.log("a user connected",socket.id);
-    // Use authenticated user from middleware
-    const userId = socket.user?._id || socket.handshake.query.userId;
-    if(userId){
-        userSocketMap[userId]=socket.id;
-        
-        // Update last seen on connect
-        User.findByIdAndUpdate(userId, { lastSeen: new Date() }).catch(err => {
-            console.log("Error updating lastSeen on connect:", err);
-        });
-    }
-    // io.emit() is used to send event to all connected clients
-    io.emit("getOnlineUsers",Object.keys(userSocketMap));
-
-    socket.on("disconnect",(){
-        console.log("user disconnected",socket.id);
-        delete userSocketMap[userId];
-        
-        // Update last seen on disconnect
-        if (userId) {
-            User.findByIdAndUpdate(userId, { lastSeen: new Date() }).catch(err => {
-                console.log("Error updating lastSeen on disconnect:", err);
-            });
-        }
-        
-        io.emit("getOnlineUsers",Object.keys(userSocketMap));
-    })
-
-    // Update last seen on activity (typing, messaging, etc.)
-    socket.on("activity", () => {
-        if (userId) {
-            User.findByIdAndUpdate(userId, { lastSeen: new Date() }).catch(err => {
-                console.log("Error updating lastSeen on activity:", err);
-            });
-        }
-    });
-
-    // Typing events
-    socket.on("typing", ({ to }) => {
-        const receiverSocketId = getReciverSocketId(to);
-        if (receiverSocketId) {
-            io.to(receiverSocketId).emit("typing", { 
-                from: userId,
-                to: to 
-            });
-        }
-    });
-
-    socket.on("stopTyping", ({ to }) => {
-        const receiverSocketId = getReciverSocketId(to);
-        if (receiverSocketId) {
-            io.to(receiverSocketId).emit("stopTyping", { 
-                from: userId,
-                to: to 
-            });
-        }
-    });
-
-    // Mark messages as read
-    socket.on("markAsRead", ({ to }) => {
-        const receiverSocketId = getReciverSocketId(to);
-        if (receiverSocketId) {
-            io.to(receiverSocketId).emit("messageRead", { 
-                readerId: userId,
-                from: userId,
-                to: to 
-            });
-        }
-    });
-
-    // Reaction events
-    socket.on("addReaction", ({ to, messageId, emoji }) => {
-        const receiverSocketId = getReciverSocketId(to);
-        if (receiverSocketId) {
-            io.to(receiverSocketId).emit("reactionAdded", {
-                messageId,
-                reaction: {
-                    userId,
-                    emoji
-                },
-                from: userId,
-                to: to
-            });
-        }
-    });
-
-    socket.on("removeReaction", ({ to, messageId, emoji }) => {
-        const receiverSocketId = getReciverSocketId(to);
-        if (receiverSocketId) {
-            io.to(receiverSocketId).emit("reactionRemoved", {
-                messageId,
-                reaction: {
-                    userId,
-                    emoji
-                },
-                from: userId,
-                to: to
-            });
-        }
-    });
-
-    // Group typing events
-    socket.on("groupTyping", ({ groupId, members }) => {
-        members.forEach(memberId => {
-            if (memberId !== userId.toString()) {
-                const memberSocketId = getReciverSocketId(memberId);
-                if (memberSocketId) {
-                    io.to(memberSocketId).emit("groupTyping", {
-                        groupId,
-                        userId,
-                        from: userId
-                    });
-                }
-            }
-        });
-    });
-
-    socket.on("groupStopTyping", ({ groupId, members }) => {
-        members.forEach(memberId => {
-            if (memberId !== userId.toString()) {
-                const memberSocketId = getReciverSocketId(memberId);
-                if (memberSocketId) {
-                    io.to(memberSocketId).emit("groupStopTyping", {
-                        groupId,
-                        userId,
-                        from: userId
-                    });
-                }
-            }
-        });
-    });
-
-});
-
- 
-export {io,app,server};
+export { io, app, server };
