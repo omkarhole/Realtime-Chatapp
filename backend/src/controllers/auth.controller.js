@@ -117,3 +117,41 @@ catch(err){
     res.status(500).json({ message: "Internal server error" });
 }
 }
+
+// Get all online user IDs
+export const getOnlineUsers = async (req, res) => {
+    try {
+        // Get the current socket map from the io instance
+        const { userSocketMap } = await import("../lib/socket.js");
+        const onlineUserIds = Object.keys(userSocketMap);
+        res.status(200).json(onlineUserIds);
+    } catch (err) {
+        console.log("error in getOnlineUsers controller", err);
+        res.status(500).json({ message: "Internal server error" });
+    }
+}
+
+// Get specific user's status (online/offline and last seen)
+export const getUserStatus = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const user = await User.findById(id).select("lastSeen");
+        
+        if (!user) {
+            return res.status(404).json({ message: "User not found" });
+        }
+
+        // Check if user is online by importing socket map
+        const { userSocketMap } = await import("../lib/socket.js");
+        const isOnline = !!userSocketMap[id];
+
+        res.status(200).json({
+            userId: id,
+            isOnline,
+            lastSeen: user.lastSeen
+        });
+    } catch (err) {
+        console.log("error in getUserStatus controller", err);
+        res.status(500).json({ message: "Internal server error" });
+    }
+}

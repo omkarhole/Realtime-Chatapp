@@ -26,7 +26,7 @@ export function getReciverSocketId(reciverId){
 }
 // used to store onlin users 
 // as soon as user login we will add him to this map
-const userSocketMap={};  // userId : socketId (key :value)
+export const userSocketMap={};  // userId : socketId (key :value)
 
 // Socket authentication middleware
 io.use(async (socket, next) => {
@@ -69,6 +69,9 @@ io.on("connection",(socket)=>{
         User.findByIdAndUpdate(userId, { lastSeen: new Date() }).catch(err => {
             console.log("Error updating lastSeen on connect:", err);
         });
+
+        // Emit userOnline event
+        io.emit("userOnline", { userId });
     }
     // io.emit() is used to send event to all connected clients
     io.emit("getOnlineUsers",Object.keys(userSocketMap));
@@ -82,6 +85,9 @@ io.on("connection",(socket)=>{
             User.findByIdAndUpdate(userId, { lastSeen: new Date() }).catch(err => {
                 console.log("Error updating lastSeen on disconnect:", err);
             });
+
+            // Emit userOffline event
+            io.emit("userOffline", { userId, lastSeen: new Date() });
         }
         
         io.emit("getOnlineUsers",Object.keys(userSocketMap));
