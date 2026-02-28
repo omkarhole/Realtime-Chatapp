@@ -11,7 +11,9 @@ const {selectedUser}=useChatStore();
         <div className="bg-base-100 rounded-lg shadow-xl w-full  max-w-6xl h-[calc(100vh-8rem)]">
           <div className="flex h-full rounded-lg overflow-hidden">
             <Sidebar/>
-            {!selectedUser? <NoChatSelected/> :<ChatContainer/>}
+            <div className={`${selectedUser ? "flex" : "hidden md:flex"} flex-1`}>
+              {!selectedUser? <NoChatSelected/> :<ChatContainer/>}
+            </div>
           </div>
         </div>
       </div>

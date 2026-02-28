@@ -3,13 +3,49 @@ import { toast } from "react-hot-toast";
 import { axiosInstance } from "../lib/axios"
 import {useAuthStore} from "./useAuthStore"
 
+let refreshUsersTimer = null;
+
+const normalizeId = (value) => {
+    if (!value) return "";
+    if (typeof value === "object") return String(value._id || value.id || "");
+    return String(value);
+};
+
+const getErrorMessage = (err, fallbackMessage) =>
+    err?.response?.data?.message || err?.message || fallbackMessage;
+
+const upsertMessage = (messages = [], incomingMessage) => {
+    if (!incomingMessage) return messages;
+
+    const incomingId = normalizeId(incomingMessage._id);
+    if (!incomingId) {
+        return [...messages, incomingMessage];
+    }
+
+    const existingIndex = messages.findIndex(
+        (message) => normalizeId(message._id) === incomingId
+    );
+
+    if (existingIndex === -1) {
+        return [...messages, incomingMessage];
+    }
+
+    const nextMessages = [...messages];
+    nextMessages[existingIndex] = {
+        ...nextMessages[existingIndex],
+        ...incomingMessage,
+    };
+
+    return nextMessages;
+};
+
 export const useChatStore = create((set,get) => ({
     messages: [],
     users: [],
     selectedUser: null,
     isUsersLoading: false,
     isMessagesLoading: false,
-    typingUsers: [],
+    isSendingMessage: false,
     searchResults: [],
     isSearchLoading: false,
     isSearchOpen: false,
@@ -28,18 +64,40 @@ export const useChatStore = create((set,get) => ({
     // Clear the reply state
     clearReplyingTo: () => set({ replyingTo: null }),
 
-    getUsers: async () => {
-        set({ isUsersLoading: true });
+    refreshUsersSilently: () => {
+        if (refreshUsersTimer) {
+            clearTimeout(refreshUsersTimer);
+        }
+
+        refreshUsersTimer = setTimeout(() => {
+            get().getUsers("", { silent: true });
+        }, 250);
+    },
+
+    getUsers: async (searchQuery = "", options = {}) => {
+        const { search = false, silent = false } = options;
+        if (!silent) set({ isUsersLoading: true });
+
         try {
-            const res = await axiosInstance.get("/messages/users");
-            set({ users: res.data.filterUsers });
+            const query = searchQuery.trim();
+            let endpoint = "/messages/users";
+            if (search && query) {
+                endpoint = `/messages/users?q=${encodeURIComponent(query)}&search=true`;
+            }
+
+            const res = await axiosInstance.get(endpoint);
+            set({ users: Array.isArray(res.data?.filterUsers) ? res.data.filterUsers : [] });
         }
         catch (err) {
             console.log("error in getting users", err);
-            toast.error("Failed to load users");
+            if (!silent) {
+                toast.error(getErrorMessage(err, "Failed to load users"));
+                set({ users: [] });
+            }
+
         }
         finally {
-            set({ isUsersLoading: false });
+            if (!silent) set({ isUsersLoading: false });
         }
     },
     getMessages: async (userId) => {
@@ -57,68 +115,69 @@ export const useChatStore = create((set,get) => ({
         }
     },
     sendMessage: async (messageData) => {
-        const{selectedUser,messages, replyingTo, clearReplyingTo}=get();
+        const{selectedUser, replyingTo, clearReplyingTo}=get();
+        if (!selectedUser) {
+            toast.error("Select a user first");
+            return false;
+        }
+
+        if (get().isSendingMessage) {
+            return false;
+        }
+
+        set({ isSendingMessage: true });
         try {
             const res=await axiosInstance.post(`/messages/send/${selectedUser._id}`,messageData);
-            set({messages:[...messages,res.data]});
+            set((state) => ({ messages: upsertMessage(state.messages, res.data) }));
+            get().refreshUsersSilently();
+            // Clear the replyingTo state after sending
             if (replyingTo) {
                 clearReplyingTo();
             }
-           toast.success("message send sucessfully ");
+            return true;
         }
         catch (err) {
             console.log("error in sending message", err);
-            toast.error("Failed to send message");
+            toast.error(getErrorMessage(err, "Failed to send message"));
+            return false;
+        }
+        finally {
+            set({ isSendingMessage: false });
         }
     },
     subscribeToMessages:()=>{
-        const{selectedUser} =get();
-        if(!selectedUser) return;
-
         const socket=useAuthStore.getState().socket;
+        if(!socket) return;
+
+        socket.off("newMessage");
         socket.on("newMessage",(newMessage)=>{
-            const isMessageSendFromSelectedUser=newMessage.senderId===selectedUser._id
-        if (!isMessageSendFromSelectedUser) return;
-            const messageWithStatus = { ...newMessage, status: 'delivered' };
-            set({messages:[...get().messages,messageWithStatus]});
-            get().markMessagesAsRead(selectedUser._id);
+            const selectedUser = get().selectedUser;
+            const selectedUserId = normalizeId(selectedUser?._id);
+            const authUserId = normalizeId(useAuthStore.getState().authUser?._id);
+            const senderId = normalizeId(newMessage.senderId);
+            const receiverId = normalizeId(newMessage.receiverId);
+            const isCurrentConversation =
+                selectedUserId &&
+                ((senderId === selectedUserId && receiverId === authUserId) ||
+                    (senderId === authUserId && receiverId === selectedUserId));
+
+            get().refreshUsersSilently();
+            if (!isCurrentConversation) return;
+
+            const messageWithStatus =
+                senderId === authUserId ? newMessage : { ...newMessage, status: "delivered" };
+            set((state) => ({ messages: upsertMessage(state.messages, messageWithStatus) }));
         });
     },
     unSubscribeFromMessages:()=>{
         const socket=useAuthStore.getState().socket;
+        if (!socket) return;
         socket.off("newMessage");
     },
     
     setSelectedUser: (selectedUser) => set({ selectedUser }),
 
-    subscribeToTyping: () => {
-        const socket = useAuthStore.getState().socket;
-        if (!socket) return;
-
-        socket.on("typing", ({ from }) => {
-            const { typingUsers } = get();
-            if (!typingUsers.includes(from)) {
-                set({ typingUsers: [...typingUsers, from] });
-            }
-        });
-
-        socket.on("stopTyping", ({ from }) => {
-            const { typingUsers } = get();
-            set({ typingUsers: typingUsers.filter(userId => userId !== from) });
-        });
-    },
-
-    unSubscribeFromTyping: () => {
-        const socket = useAuthStore.getState().socket;
-        if (!socket) return;
-        socket.off("typing");
-        socket.off("stopTyping");
-    },
-
-    isTyping: (userId) => {
-        return get().typingUsers.includes(userId);
-    },
-
+    // Mark messages as read
     markMessagesAsRead: async (senderId) => {
         const { selectedUser } = get();
         if (!selectedUser) return;
@@ -129,8 +188,10 @@ export const useChatStore = create((set,get) => ({
             if (socket) {
                 socket.emit("markAsRead", { to: senderId });
             }
-            const updatedMessages = get().messages.map(msg => 
-                msg.senderId === senderId ? { ...msg, status: 'read' } : msg
+            
+            // Update local message status
+            const updatedMessages = get().messages.map(msg =>
+                normalizeId(msg.senderId) === normalizeId(senderId) ? { ...msg, status: 'read' } : msg
             );
             set({ messages: updatedMessages });
         }
@@ -143,9 +204,11 @@ export const useChatStore = create((set,get) => ({
         const socket = useAuthStore.getState().socket;
         if (!socket) return;
 
+        socket.off("messageRead");
         socket.on("messageRead", ({ from }) => {
-            const updatedMessages = get().messages.map(msg => 
-                msg.senderId === from ? { ...msg, status: 'read' } : msg
+            // Update messages from the selected user to read status
+            const updatedMessages = get().messages.map(msg =>
+                normalizeId(msg.receiverId) === normalizeId(from) ? { ...msg, status: 'read' } : msg
             );
             set({ messages: updatedMessages });
         });
@@ -267,12 +330,15 @@ export const useChatStore = create((set,get) => ({
         const socket = useAuthStore.getState().socket;
         if (!socket) return;
 
+        socket.off("reactionAdded");
+        socket.off("reactionRemoved");
+
         socket.on("reactionAdded", ({ messageId, reaction }) => {
             const { messages } = get();
             const updatedMessages = messages.map(msg => {
                 if (msg._id === messageId) {
                     const existingReaction = msg.reactions?.find(
-                        r => r.userId === reaction.userId && r.emoji === reaction.emoji
+                        r => normalizeId(r.userId) === normalizeId(reaction.userId) && r.emoji === reaction.emoji
                     );
                     if (!existingReaction) {
                         return { ...msg, reactions: [...(msg.reactions || []), reaction] };
@@ -290,7 +356,7 @@ export const useChatStore = create((set,get) => ({
                     return {
                         ...msg,
                         reactions: (msg.reactions || []).filter(
-                            r => !(r.userId === reaction.userId && r.emoji === reaction.emoji)
+                            r => !(normalizeId(r.userId) === normalizeId(reaction.userId) && r.emoji === reaction.emoji)
                         )
                     };
                 }
