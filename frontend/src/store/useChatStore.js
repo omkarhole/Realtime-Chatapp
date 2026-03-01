@@ -51,6 +51,10 @@ export const useChatStore = create((set,get) => ({
     isSearchOpen: false,
     replyingTo: null,
 
+    // Starred messages state
+    starredMessages: [],
+    isStarredMessagesLoading: false,
+
     // Group-related state
     groups: [],
     selectedGroup: null,
@@ -169,7 +173,7 @@ export const useChatStore = create((set,get) => ({
             set((state) => ({ messages: upsertMessage(state.messages, messageWithStatus) }));
         });
     },
-    unSubscribeFromMessages:()=>{
+    unSubscribeFromMessages:(){
         const socket=useAuthStore.getState().socket;
         if (!socket) return;
         socket.off("newMessage");
@@ -411,6 +415,131 @@ export const useChatStore = create((set,get) => ({
         const socket = useAuthStore.getState().socket;
         if (!socket) return;
         socket.off("messageDeleted");
+    },
+
+    // ==================== STARRED MESSAGES ACTIONS ====================
+    
+    getStarredMessages: async () => {
+        set({ isStarredMessagesLoading: true });
+        try {
+            const res = await axiosInstance.get("/messages/starred");
+            set({ starredMessages: res.data });
+        }
+        catch (err) {
+            console.log("Error fetching starred messages:", err);
+            toast.error("Failed to load starred messages");
+        }
+        finally {
+            set({ isStarredMessagesLoading: false });
+        }
+    },
+
+    toggleStarMessage: async (messageId) => {
+        const { messages, starredMessages } = get();
+        const authUserId = useAuthStore.getState().authUser?._id;
+
+        try {
+            const res = await axiosInstance.post(`/messages/${messageId}/star`);
+            const { isStarred } = res.data;
+
+            // Update messages in current conversation
+            const updatedMessages = messages.map(msg => {
+                if (msg._id === messageId) {
+                    let starredBy = msg.starredBy || [];
+                    if (isStarred) {
+                        starredBy = [...starredBy, { _id: authUserId }];
+                    } else {
+                        starredBy = starredBy.filter(s => normalizeId(s) !== normalizeId(authUserId));
+                    }
+                    return { ...msg, starredBy };
+                }
+                return msg;
+            });
+            set({ messages: updatedMessages });
+
+            // Update starred messages list
+            if (isStarred) {
+                const starredMessage = messages.find(msg => msg._id === messageId);
+                if (starredMessage) {
+                    set({ starredMessages: [...starredMessages, { ...starredMessage, starredBy: res.data.starredBy }] });
+                }
+            } else {
+                set({ starredMessages: starredMessages.filter(msg => msg._id !== messageId) });
+            }
+
+            toast.success(res.data.message);
+            return isStarred;
+        }
+        catch (err) {
+            console.log("Error toggling star:", err);
+            toast.error("Failed to toggle star");
+            return null;
+        }
+    },
+
+    isMessageStarred: (messageId) => {
+        const { messages, starredMessages } = get();
+        const authUserId = normalizeId(useAuthStore.getState().authUser?._id);
+        
+        // Check in current messages
+        const message = messages.find(msg => msg._id === messageId);
+        if (message?.starredBy) {
+            return message.starredBy.some(s => normalizeId(s) === authUserId);
+        }
+        
+        // Check in starred messages
+        const starredMessage = starredMessages.find(msg => msg._id === messageId);
+        if (starredMessage?.starredBy) {
+            return starredMessage.starredBy.some(s => normalizeId(s) === authUserId);
+        }
+        
+        return false;
+    },
+
+    subscribeToStarredMessages: () => {
+        const socket = useAuthStore.getState().socket;
+        if (!socket) return;
+
+        socket.off("messageStarred");
+        socket.on("messageStarred", ({ messageId, isStarred, userId }) => {
+            const authUserId = normalizeId(useAuthStore.getState().authUser?._id);
+            
+            // Only update if the change is made by another user
+            if (normalizeId(userId) === authUserId) return;
+
+            const { messages, starredMessages } = get();
+
+            // Update messages in current conversation
+            const updatedMessages = messages.map(msg => {
+                if (msg._id === messageId) {
+                    let starredBy = msg.starredBy || [];
+                    if (isStarred) {
+                        starredBy = [...starredBy, { _id: userId }];
+                    } else {
+                        starredBy = starredBy.filter(s => normalizeId(s) !== normalizeId(userId));
+                    }
+                    return { ...msg, starredBy };
+                }
+                return msg;
+            });
+            set({ messages: updatedMessages });
+
+            // Update starred messages list
+            if (isStarred) {
+                const starredMessage = messages.find(msg => msg._id === messageId);
+                if (starredMessage && !starredMessages.find(m => m._id === messageId)) {
+                    set({ starredMessages: [...starredMessages, starredMessage] });
+                }
+            } else {
+                set({ starredMessages: starredMessages.filter(msg => msg._id !== messageId) });
+            }
+        });
+    },
+
+    unSubscribeFromStarredMessages: () => {
+        const socket = useAuthStore.getState().socket;
+        if (!socket) return;
+        socket.off("messageStarred");
     },
 
     // ==================== GROUP ACTIONS ====================

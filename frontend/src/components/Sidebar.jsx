@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { Users, Search, X } from "lucide-react";
+import { Users, Search, X, Star } from "lucide-react";
+import { Link } from "react-router-dom";
 import { useChatStore } from "../store/useChatStore";
 import { useAuthStore } from "../store/useAuthStore";
 import SidebarSkeleton from "./SidebarSkeleton";
@@ -41,9 +42,18 @@ const Sidebar = () => {
       } w-full md:w-80 lg:w-96`}
     >
       <div className="border-b border-base-300 w-full p-5">
-        <div className="flex items-center gap-2">
-          <Users className="size-6" />
-          <span className="font-medium">Contacts</span>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Users className="size-6" />
+            <span className="font-medium">Contacts</span>
+          </div>
+          <Link
+            to="/starred"
+            className="btn btn-circle btn-sm btn-ghost"
+            title="Starred Messages"
+          >
+            <Star size={20} />
+          </Link>
         </div>
 
         <div className="mt-3 relative">
@@ -62,13 +72,6 @@ const Sidebar = () => {
               </button>
             )}
           </div>
-          <button
-            onClick={toggleGroupModal}
-            className="btn btn-circle btn-sm btn-ghost"
-            title="Create Group"
-          >
-            <Plus size={20} />
-          </button>
         </div>
 
         <div className="mt-3 hidden md:flex items-center gap-2">
@@ -83,43 +86,6 @@ const Sidebar = () => {
           </label>
           <span className="text-xs text-zinc-500">({Math.max(0, onlineUsers.length - 1)} online)</span>
         </div>
-
-        {/* Search Input - Only show for chats */}
-        {activeTab === "chats" && (
-          <>
-            <div className="mt-3 relative">
-              <div className="flex items-center gap-2">
-                <Search className="size-4 text-zinc-400" />
-                <input
-                  type="text"
-                  placeholder="Search messages..."
-                  value={searchQuery}
-                  onChange={handleSearch}
-                  className="input input-sm input-bordered w-full bg-base-200"
-                />
-                {searchQuery && (
-                  <button onClick={handleClearSearch} className="absolute right-2">
-                    <X className="size-4 text-zinc-400" />
-                  </button>
-                )}
-              </div>
-            </div>
-
-            {/* online filter toggle */}
-            <div className="mt-3 hidden lg:flex items-center gap-2">
-              <label className="cursor-pointer flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  checked={showOnlineOnly}
-                  onChange={(e) => setShowOnlineOnly(e.target.checked)}
-                  className="checkbox checkbox-sm"
-                />
-                <span className="text-sm">Show online only</span>
-              </label>
-              <span className="text-xs text-zinc-500">({onlineUsers.length - 1} online)</span>
-            </div>
-          </>
-        )}
       </div>
 
       <div className="overflow-y-auto w-full py-3">

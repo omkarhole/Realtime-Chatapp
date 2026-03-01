@@ -444,3 +444,73 @@ export const removeReaction = async (req, res) => {
     return res.status(500).json({ message: "Internal Server Error" });
   }
 };
+
+// Toggle star status for a message
+export const toggleStarMessage = async (req, res) => {
+  try {
+    const { messageId } = req.params;
+    const userId = req.user._id;
+
+    const message = await Message.findById(messageId);
+    if (!message) {
+      return res.status(404).json({ message: "Message not found" });
+    }
+
+    const userIdStr = userId.toString();
+    const isStarred = message.starredBy.some(id => id.toString() === userIdStr);
+
+    if (isStarred) {
+      message.starredBy = message.starredBy.filter(id => id.toString() !== userIdStr);
+    } else {
+      message.starredBy.push(userId);
+    }
+
+    await message.save();
+
+    const updatedMessage = await Message.findById(messageId)
+      .populate("senderId", "fullName profilePic username")
+      .populate("receiverId", "fullName profilePic username")
+      .populate("starredBy", "fullName profilePic username");
+
+    const senderSocketId = getReciverSocketId(message.senderId);
+    const receiverSocketId = getReciverSocketId(message.receiverId);
+
+    const starData = {
+      messageId,
+      isStarred: !isStarred,
+      userId,
+    };
+
+    if (senderSocketId) io.to(senderSocketId).emit("messageStarred", starData);
+    if (receiverSocketId) io.to(receiverSocketId).emit("messageStarred", starData);
+
+    return res.status(200).json({
+      message: isStarred ? "Message unstarred" : "Message starred",
+      isStarred: !isStarred,
+      starredBy: updatedMessage.starredBy,
+    });
+  } catch (err) {
+    console.error("Error toggling star:", err);
+    return res.status(500).json({ message: "Internal Server Error" });
+  }
+};
+
+// Get all starred messages for user
+export const getStarredMessages = async (req, res) => {
+  try {
+    const userId = req.user._id;
+
+    const messages = await Message.find({
+      starredBy: userId,
+    })
+      .populate("senderId", "fullName profilePic username")
+      .populate("receiverId", "fullName profilePic username")
+      .populate("starredBy", "fullName profilePic username")
+      .sort({ createdAt: -1 });
+
+    return res.status(200).json(messages);
+  } catch (err) {
+    console.error("Error fetching starred messages:", err);
+    return res.status(500).json({ message: "Internal Server Error" });
+  }
+};
