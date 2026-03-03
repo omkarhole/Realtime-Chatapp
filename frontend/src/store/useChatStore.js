@@ -62,6 +62,10 @@ export const useChatStore = create((set,get) => ({
     groupTypingUsers: [],
     isGroupModalOpen: false,
 
+    // Forward message state
+    forwardModalOpen: false,
+    messageToForward: null,
+
     // Set the message to reply to
     setReplyingTo: (message) => set({ replyingTo: message }),
 
@@ -780,6 +784,39 @@ export const useChatStore = create((set,get) => ({
         catch (err) {
             console.log("Error leaving group:", err);
             toast.error(err.response?.data?.message || "Failed to leave group");
+        }
+    },
+
+    // ==================== FORWARD MESSAGE ACTIONS ====================
+    
+    setForwardModalOpen: (isOpen) => set({ forwardModalOpen: isOpen }),
+    
+    setMessageToForward: (message) => set({ messageToForward: message }),
+    
+    forwardMessage: async (messageId, recipients) => {
+        const { messageToForward } = get();
+        
+        if (!messageToForward) {
+            toast.error("No message selected to forward");
+            return false;
+        }
+
+        if (!recipients || recipients.length === 0) {
+            toast.error("Please select at least one recipient");
+            return false;
+        }
+
+        try {
+            const res = await axiosInstance.post(`/messages/${messageId}/forward`, { recipients });
+            toast.success(res.data.message);
+            set({ forwardModalOpen: false, messageToForward: null });
+            get().refreshUsersSilently();
+            return true;
+        }
+        catch (err) {
+            console.log("Error forwarding message:", err);
+            toast.error(getErrorMessage(err, "Failed to forward message"));
+            return false;
         }
     }
 }));

@@ -1,6 +1,6 @@
 import express from "express";
 import { protectRoute } from "../middleware/auth.middleware.js";
-import { getMessage, getUsersForSidebar, sendMessage, markMessageAsRead, searchMessages, getAllMessages, addReaction, removeReaction, deleteMessage, toggleStarMessage, getStarredMessages } from "../controllers/message.controller.js";
+import { getMessage, getUsersForSidebar, sendMessage, markMessageAsRead, searchMessages, getAllMessages, addReaction, removeReaction, deleteMessage, toggleStarMessage, getStarredMessages, forwardMessage } from "../controllers/message.controller.js";
 
 
 const router=express.Router();
@@ -30,5 +30,8 @@ router.delete("/:messageId/reactions", protectRoute, removeReaction)
 
 // Star routes
 router.post("/:messageId/star", protectRoute, toggleStarMessage)
+
+// Forward message route
+router.post("/:messageId/forward", protectRoute, forwardMessage)
 
 export default router;
