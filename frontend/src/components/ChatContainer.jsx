@@ -1,5 +1,5 @@
 import React, { useEffect, useRef } from "react";
-import { FileText, Download, Reply, Star } from "lucide-react";
+import { FileText, Download, Reply, Star, Forward } from "lucide-react";
 import { useChatStore } from "../store/useChatStore";
 import { useAuthStore } from "../store/useAuthStore";
 import { formatMessageTime } from "../lib/utils";
@@ -7,6 +7,7 @@ import ChatHeader from "./ChatHeader";
 import MessageInput from "./MessageInput";
 import MessageSkeleton from "./MessageSkeleton";
 import EmojiPicker from "./EmojiPicker";
+import ForwardModal from "./ForwardModal";
 
 const normalizeId = (value) => {
   if (!value) return "";
@@ -29,6 +30,8 @@ const ChatContainer = () => {
     removeReaction,
     setReplyingTo,
     toggleStarMessage,
+    setForwardModalOpen,
+    setMessageToForward,
   } = useChatStore();
 
   const { authUser, socket } = useAuthStore();
@@ -157,6 +160,11 @@ const ChatContainer = () => {
         </div>
       </div>
     );
+  };
+
+  const handleForward = (message) => {
+    setMessageToForward(message);
+    setForwardModalOpen(true);
   };
 
   // Render audio player
@@ -293,6 +301,13 @@ const ChatContainer = () => {
                 >
                   <Star size={14} fill={isMessageStarred(message) ? "currentColor" : "none"} />
                 </button>
+                <button
+                  onClick={() => handleForward(message)}
+                  className="btn btn-circle btn-ghost btn-xs text-zinc-400 hover:text-primary"
+                  title="Forward"
+                >
+                  <Forward size={14} />
+                </button>
               </div>
             </div>
 
@@ -325,6 +340,7 @@ const ChatContainer = () => {
       </div>
 
       <MessageInput />
+      <ForwardModal />
     </div>
   );
 };

@@ -514,3 +514,158 @@ export const getStarredMessages = async (req, res) => {
     return res.status(500).json({ message: "Internal Server Error" });
   }
 };
+
+// Forward a message to users or groups
+export const forwardMessage = async (req, res) => {
+  try {
+    const { messageId } = req.params;
+    const { recipients } = req.body; // Array of { type: 'user'|'group', id: string }
+    const senderId = req.user._id.toString();
+
+    if (!recipients || !Array.isArray(recipients) || recipients.length === 0) {
+      return res.status(400).json({ message: "Recipients are required" });
+    }
+
+    // Find the original message
+    const originalMessage = await Message.findById(messageId);
+    if (!originalMessage) {
+      return res.status(404).json({ message: "Original message not found" });
+    }
+
+    const forwardedMessages = [];
+    const errors = [];
+
+    for (const recipient of recipients) {
+      try {
+        if (recipient.type === 'user') {
+          const receiverId = recipient.id;
+
+          // Don't forward to self
+          if (receiverId === senderId) {
+            errors.push({ recipient: receiverId, error: "Cannot forward to yourself" });
+            continue;
+          }
+
+          // Verify receiver exists
+          const receiverExists = await User.exists({ _id: receiverId });
+          if (!receiverExists) {
+            errors.push({ recipient: receiverId, error: "User not found" });
+            continue;
+          }
+
+          // Find or create conversation
+          let conversation = await findConversationByUsers(senderId, receiverId);
+          if (!conversation) {
+            conversation = await Conversation.create({
+              participants: [senderId, receiverId],
+              roomKey: createRoomKey(senderId, receiverId),
+            });
+          }
+
+          // Create forwarded message
+          const forwardedMessage = await Message.create({
+            conversationId: conversation._id,
+            senderId,
+            receiverId,
+            text: originalMessage.text || "",
+            image: originalMessage.image || null,
+            pdf: originalMessage.pdf || null,
+            audio: originalMessage.audio || null,
+            audioDuration: originalMessage.audioDuration || 0,
+          });
+
+          // Update conversation
+          await Conversation.findByIdAndUpdate(conversation._id, {
+            lastMessage: forwardedMessage._id,
+            lastMessageAt: forwardedMessage.createdAt,
+          });
+
+          // Populate the message for response
+          const populatedMessage = await Message.findById(forwardedMessage._id)
+            .populate("senderId", "fullName profilePic username")
+            .populate("receiverId", "fullName profilePic username");
+
+          forwardedMessages.push(populatedMessage);
+
+          // Notify receiver via socket
+          const receiverSocketId = getReciverSocketId(receiverId);
+          if (receiverSocketId) {
+            io.to(receiverSocketId).emit("newMessage", {
+              ...populatedMessage,
+              status: "delivered"
+            });
+          }
+
+        } else if (recipient.type === 'group') {
+          const groupId = recipient.id;
+
+          // Verify group exists
+          const Group = (await import("../models/group.model.js")).default;
+          const group = await Group.findById(groupId);
+          if (!group) {
+            errors.push({ recipient: groupId, error: "Group not found" });
+            continue;
+          }
+
+          // Check if user is a member of the group
+          const isMember = group.members.some(
+            memberId => memberId.toString() === senderId
+          );
+          if (!isMember) {
+            errors.push({ recipient: groupId, error: "You are not a member of this group" });
+            continue;
+          }
+
+          // Create forwarded group message
+          const forwardedMessage = await Message.create({
+            senderId,
+            text: originalMessage.text || "",
+            image: originalMessage.image || null,
+            pdf: originalMessage.pdf || null,
+            audio: originalMessage.audio || null,
+            audioDuration: originalMessage.audioDuration || 0,
+            groupId: groupId,
+          });
+
+          // Populate the message for response
+          const populatedMessage = await Message.findById(forwardedMessage._id)
+            .populate("senderId", "fullName profilePic username");
+
+          forwardedMessages.push({ ...populatedMessage, groupId });
+
+          // Notify group members via socket
+          group.members.forEach(memberId => {
+            if (memberId.toString() !== senderId) {
+              const memberSocketId = getReciverSocketId(memberId.toString());
+              if (memberSocketId) {
+                io.to(memberSocketId).emit("newGroupMessage", populatedMessage);
+              }
+            }
+          });
+        }
+      } catch (recipientError) {
+        console.error(`Error forwarding to ${recipient.id}:`, recipientError);
+        errors.push({ recipient: recipient.id, error: recipientError.message });
+      }
+    }
+
+    // Notify sender about the forwarded messages
+    const senderSocketId = getReciverSocketId(senderId);
+    if (senderSocketId) {
+      forwardedMessages.forEach(msg => {
+        io.to(senderSocketId).emit("newMessage", msg);
+      });
+    }
+
+    return res.status(201).json({
+      message: `Message forwarded to ${forwardedMessages.length} recipient(s)`,
+      forwardedMessages,
+      errors: errors.length > 0 ? errors : undefined,
+      count: forwardedMessages.length
+    });
+
+  } catch (err) {
+    console.error("Error forwarding message:", err);
+    return res.status(500).json({ message: "Internal Server Error" });
+  }
+};
