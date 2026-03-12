@@ -900,5 +900,93 @@ export const useChatStore = create((set,get) => ({
         finally {
             set({ isMediaLoading: false });
         }
+    },
+
+    // ==================== PRIVACY & BLOCKING ACTIONS ====================
+
+    // Privacy state
+    blockedUsers: [],
+    isBlockedUsersLoading: false,
+
+    // Block a user
+    blockUser: async (userIdToBlock) => {
+        try {
+            const res = await axiosInstance.post("/privacy/block", { userIdToBlock });
+            toast.success(res.data.message);
+            get().refreshUsersSilently();
+            return true;
+        }
+        catch (err) {
+            console.log("Error blocking user:", err);
+            toast.error(getErrorMessage(err, "Failed to block user"));
+            return false;
+        }
+    },
+
+    // Unblock a user
+    unblockUser: async (userIdToUnblock) => {
+        try {
+            const res = await axiosInstance.post("/privacy/unblock", { userIdToUnblock });
+            toast.success(res.data.message);
+            set((state) => ({
+                blockedUsers: state.blockedUsers.filter(u => u._id !== userIdToUnblock)
+            }));
+            get().refreshUsersSilently();
+            return true;
+        }
+        catch (err) {
+            console.log("Error unblocking user:", err);
+            toast.error(getErrorMessage(err, "Failed to unblock user"));
+            return false;
+        }
+    },
+
+    // Get blocked users
+    getBlockedUsers: async () => {
+        set({ isBlockedUsersLoading: true });
+        try {
+            const res = await axiosInstance.get("/privacy/blocked-users");
+            set({ blockedUsers: res.data.blockedUsers || [] });
+        }
+        catch (err) {
+            console.log("Error fetching blocked users:", err);
+            toast.error(getErrorMessage(err, "Failed to load blocked users"));
+            set({ blockedUsers: [] });
+        }
+        finally {
+            set({ isBlockedUsersLoading: false });
+        }
+    },
+
+    // Check if user is blocked
+    isUserBlocked: async (otherUserId) => {
+        try {
+            const res = await axiosInstance.get(`/privacy/blocked/${otherUserId}`);
+            return res.data.isBlocked;
+        }
+        catch (err) {
+            console.log("Error checking block status:", err);
+            return false;
+        }
+    },
+
+    // Report a user
+    reportUser: async (reportedUserId, messageId, reason, description) => {
+        try {
+            const res = await axiosInstance.post("/privacy/report", {
+                reportedUserId,
+                messageId: messageId || null,
+                reason,
+                description: description || ""
+            });
+            toast.success(res.data.message);
+            return res.data.reportId;
+        }
+        catch (err) {
+            console.log("Error reporting user:", err);
+            const errorMessage = err.response?.data?.message || "Failed to report user";
+            toast.error(errorMessage);
+            return null;
+        }
     }
 }));

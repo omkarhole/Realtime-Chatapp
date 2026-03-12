@@ -4,6 +4,7 @@ import SignUpPage from "./pages/SignUpPage";
 import LoginPage from "./pages/LoginPage";
 import SettingsPage from "./pages/SettingsPage"
 import ProfilePage from "./pages/ProfilePage"
+import PrivacySettingsPage from "./pages/PrivacySettingsPage"
 import HomePage from "./pages/HomePage";
 import ForgotPasswordPage from "./pages/ForgotPasswordPage";
 import ResetPasswordPage from "./pages/ResetPasswordPage";
@@ -53,6 +54,7 @@ const App = () => {
         <Route path='/reset-password' element={!authUser ? <ResetPasswordPage /> : <Navigate to="/" />} />
         <Route path='/Settings' element={<SettingsPage />} />
         <Route path='/Profile' element={authUser ? <ProfilePage /> : <Navigate to="/login" />} />
+        <Route path='/privacy' element={authUser ? <PrivacySettingsPage /> : <Navigate to="/login" />} />
         <Route path='/starred' element={authUser ? <StarredMessagesPage /> : <Navigate to="/login" />} />
       </Routes>
       <Toaster />

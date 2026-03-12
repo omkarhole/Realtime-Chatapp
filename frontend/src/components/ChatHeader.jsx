@@ -1,13 +1,16 @@
 import { useChatStore } from "../store/useChatStore"
 import { useAuthStore } from "../store/useAuthStore"
-import { X, Download, MessageSquare, Users, ArrowLeft, Image as ImageIcon } from "lucide-react";
+import { X, Download, MessageSquare, Users, ArrowLeft, Image as ImageIcon, Info } from "lucide-react";
 import { formatLastSeen } from "../lib/utils";
 import MediaGallery from "./MediaGallery";
+import { useState } from "react";
+import UserProfileModal from "./UserProfileModal";
 
 const ChatHeader = () => {
 
     const { selectedUser, setSelectedUser, selectedGroup, setSelectedGroup, exportChatHistory, isMediaGalleryOpen, setMediaGalleryOpen, mediaByDate, getMedia, isMediaLoading } = useChatStore();
     const { onlineUsers } = useAuthStore();
+    const [showUserProfile, setShowUserProfile] = useState(false);
 
     // Check if we're in a group chat
     const isGroup = !!selectedGroup;
@@ -57,8 +60,8 @@ const ChatHeader = () => {
                     </button>
                     
                     {/* avatar */}
-                    <div className="avatar">
-                        <div className="size-10 rounded-full relative">
+                    <div className="avatar cursor-pointer" onClick={() => !isGroup && setShowUserProfile(true)}>
+                        <div className="size-10 rounded-full relative hover:opacity-80 transition">
                             {isGroup ? (
                                 selectedGroup?.avatar ? (
                                     <img src={selectedGroup.avatar} alt={selectedGroup.name} />
@@ -74,8 +77,8 @@ const ChatHeader = () => {
                     </div>
                     
                     {/* user/group info */}
-                    <div>
-                        <h3 className="font-medium">
+                    <div className="cursor-pointer" onClick={() => !isGroup && setShowUserProfile(true)}>
+                        <h3 className="font-medium hover:text-primary transition">
                             {isGroup ? selectedGroup?.name : selectedUser?.fullName}
                         </h3>
                         <p className="text-sm text-base-content/70">
@@ -130,6 +133,17 @@ const ChatHeader = () => {
                         </div>
                     )}
                     
+                    {/* User info button - only for individual chats */}
+                    {!isGroup && (
+                        <button 
+                            onClick={() => setShowUserProfile(true)} 
+                            className="btn btn-ghost btn-sm btn-circle"
+                            title="View user profile"
+                        >
+                            <Info size={18} />
+                        </button>
+                    )}
+
                     {/* Export button - only for individual chats */}
                     {!isGroup && (
                         <button 
@@ -164,6 +178,17 @@ const ChatHeader = () => {
             isOpen={isMediaGalleryOpen} 
             onClose={() => setMediaGalleryOpen(false)} 
             mediaByDate={mediaByDate}
+        />
+
+        {/* User Profile Modal */}
+        <UserProfileModal
+            isOpen={showUserProfile}
+            onClose={() => setShowUserProfile(false)}
+            user={selectedUser}
+            onStartChat={(userId) => {
+                // Refresh the chat
+                setSelectedUser(selectedUser);
+            }}
         />
         </>
     )
