@@ -267,6 +267,8 @@ export const useChatStore = create((set,get) => ({
                     receiverName: msg.receiverId?.fullName || 'Unknown',
                     text: msg.text || '',
                     image: msg.image || null,
+                    audio: msg.audio || null,
+                    audioDuration: msg.audioDuration || 0,
                     status: msg.status,
                     reactions: msg.reactions || [],
                     createdAt: msg.createdAt,

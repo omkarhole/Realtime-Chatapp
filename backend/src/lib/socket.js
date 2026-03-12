@@ -191,6 +191,15 @@ io.on("connection", (socket) => {
       to,
     });
   });
+
+  socket.on("voiceMessage", ({ to, message }) => {
+    if (!to) return;
+    io.to(`user:${to}`).emit("voiceMessage", {
+      message,
+      from: userId,
+      to,
+    });
+  });
 });
 
 export { io, app, server };

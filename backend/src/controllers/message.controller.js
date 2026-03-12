@@ -194,12 +194,12 @@ export const getMessage = async (req, res) => {
 
 export const sendMessage = async (req, res) => {
   try {
-    const { text, image, pdf, replyTo } = req.body;
+    const { text, image, pdf, audio, audioDuration, replyTo } = req.body;
     const receiverId = req.params.id?.toString();
     const senderId = req.user._id.toString();
     const trimmedText = text?.trim();
 
-    if (!trimmedText && !image && !pdf) {
+    if (!trimmedText && !image && !pdf && !audio) {
       return res.status(400).json({ message: "Message content is required" });
     }
 
@@ -222,6 +222,7 @@ export const sendMessage = async (req, res) => {
 
     let imageUrl;
     let pdfUrl;
+    let audioUrl;
 
     if (image) {
       const uploadResponse = await cloudinary.uploader.upload(image);
@@ -233,6 +234,11 @@ export const sendMessage = async (req, res) => {
       pdfUrl = uploadResponse.secure_url;
     }
 
+    if (audio) {
+      const uploadResponse = await cloudinary.uploader.upload(audio, { resource_type: "video" });
+      audioUrl = uploadResponse.secure_url;
+    }
+
     const newMessage = await Message.create({
       conversationId: conversation._id,
       senderId,
@@ -240,6 +246,8 @@ export const sendMessage = async (req, res) => {
       text: trimmedText || "",
       image: imageUrl,
       pdf: pdfUrl,
+      audio: audioUrl,
+      audioDuration: audioDuration || 0,
       replyTo: replyTo || null,
     });
 
