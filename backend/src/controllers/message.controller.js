@@ -540,7 +540,6 @@ export const deleteMessageForMe = async (req, res) => {
 
     // Only allow delete for own messages or messages in your conversations
     const isOwnMessage = message.senderId._id.toString() === userId.toString();
-    const isOwnMessage = message.senderId._id.toString() === userId.toString();
     const isInConversation = message.conversationId ? 
       !!(await Conversation.findOne({ _id: message.conversationId, participants: userId })) 
       : false;
@@ -732,6 +731,81 @@ export const forwardMessage = async (req, res) => {
 
   } catch (err) {
     console.error("Error forwarding message:", err);
+    return res.status(500).json({ message: "Internal Server Error" });
+  }
+};
+
+// Get media (images and PDFs) from a conversation grouped by date
+export const getMedia = async (req, res) => {
+  try {
+    const { conversationId } = req.params;
+    const userId = req.user._id;
+
+    // Verify user is part of the conversation
+    const conversation = await Conversation.findById(conversationId);
+    if (!conversation) {
+      return res.status(404).json({ message: "Conversation not found" });
+    }
+
+    // Check if user is a participant
+    const isParticipant = conversation.participants.some(p => p.toString() === userId.toString());
+    if (!isParticipant) {
+      return res.status(403).json({ message: "Unauthorized access to this conversation" });
+    }
+
+    // Fetch all messages with media (images or PDFs) from the conversation
+    const messages = await Message.find({
+      conversationId: conversationId,
+      $or: [
+        { image: { $exists: true, $ne: null } },
+        { pdf: { $exists: true, $ne: null } }
+      ],
+      deletedForMe: { $ne: userId }
+    })
+      .sort({ createdAt: -1 })
+      .populate("senderId", "fullName profilePic username")
+      .populate("receiverId", "fullName profilePic username");
+
+    // Group messages by date
+    const groupedByDate = {};
+    messages.forEach(message => {
+      const date = new Date(message.createdAt).toLocaleDateString('en-US', {
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric'
+      });
+
+      if (!groupedByDate[date]) {
+        groupedByDate[date] = [];
+      }
+
+      groupedByDate[date].push({
+        _id: message._id,
+        senderId: message.senderId,
+        receiverId: message.receiverId,
+        image: message.image || null,
+        pdf: message.pdf || null,
+        text: message.text || "",
+        createdAt: message.createdAt,
+        type: message.image ? 'image' : 'pdf'
+      });
+    });
+
+    // Convert to array format and sort dates in descending order
+    const mediaByDate = Object.keys(groupedByDate)
+      .sort((a, b) => new Date(b) - new Date(a))
+      .map(date => ({
+        date,
+        media: groupedByDate[date]
+      }));
+
+    return res.status(200).json({
+      total: messages.length,
+      mediaByDate
+    });
+
+  } catch (err) {
+    console.error("Error fetching media:", err);
     return res.status(500).json({ message: "Internal Server Error" });
   }
 };

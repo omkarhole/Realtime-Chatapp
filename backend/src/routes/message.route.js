@@ -1,6 +1,6 @@
 import express from "express";
 import { protectRoute } from "../middleware/auth.middleware.js";
-import { getMessage, getUsersForSidebar, sendMessage, markMessageAsRead, searchMessages, getAllMessages, addReaction, removeReaction, deleteMessage, toggleStarMessage, getStarredMessages, forwardMessage } from "../controllers/message.controller.js";
+import { getMessage, getUsersForSidebar, sendMessage, markMessageAsRead, searchMessages, getAllMessages, addReaction, removeReaction, deleteMessage, toggleStarMessage, getStarredMessages, forwardMessage, getMedia } from "../controllers/message.controller.js";
 
 
 const router=express.Router();
@@ -14,6 +14,9 @@ router.get("/all",protectRoute,getAllMessages)
 
 // Starred messages route
 router.get("/starred", protectRoute, getStarredMessages)
+
+// Media gallery route - must be before /:id to avoid conflicts
+router.get("/media/:conversationId", protectRoute, getMedia)
 
 router.get("/:id",protectRoute,getMessage)
 

@@ -1,11 +1,12 @@
 import { useChatStore } from "../store/useChatStore"
 import { useAuthStore } from "../store/useAuthStore"
-import { X, Download, MessageSquare, Users, ArrowLeft } from "lucide-react";
+import { X, Download, MessageSquare, Users, ArrowLeft, Image as ImageIcon } from "lucide-react";
 import { formatLastSeen } from "../lib/utils";
+import MediaGallery from "./MediaGallery";
 
 const ChatHeader = () => {
 
-    const { selectedUser, setSelectedUser, selectedGroup, setSelectedGroup, exportChatHistory } = useChatStore();
+    const { selectedUser, setSelectedUser, selectedGroup, setSelectedGroup, exportChatHistory, isMediaGalleryOpen, setMediaGalleryOpen, mediaByDate, getMedia, isMediaLoading } = useChatStore();
     const { onlineUsers } = useAuthStore();
 
     // Check if we're in a group chat
@@ -18,6 +19,11 @@ const ChatHeader = () => {
         } else {
             setSelectedUser(null);
         }
+    };
+
+    const handleOpenMediaGallery = async () => {
+        setMediaGalleryOpen(true);
+        await getMedia();
     };
 
     // Get group members for display
@@ -38,7 +44,8 @@ const ChatHeader = () => {
     const onlineMembers = getOnlineMembers();
 
     return (
-        <div className="p-2.5 border-b border-base-300">
+        <>
+            <div className="p-2.5 border-b border-base-300">
             <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
                     {/* Back button for mobile */}
@@ -133,6 +140,16 @@ const ChatHeader = () => {
                             <Download size={18} />
                         </button>
                     )}
+
+                    {/* Media Gallery button */}
+                    <button 
+                        onClick={handleOpenMediaGallery}
+                        className="btn btn-ghost btn-sm btn-circle"
+                        title="View media gallery"
+                        disabled={isMediaLoading}
+                    >
+                        <ImageIcon size={18} />
+                    </button>
                     
                     {/* Close button */}
                     <button onClick={handleClose} className="btn btn-ghost btn-sm btn-circle">
@@ -142,6 +159,13 @@ const ChatHeader = () => {
 
             </div>
         </div>
+
+        <MediaGallery 
+            isOpen={isMediaGalleryOpen} 
+            onClose={() => setMediaGalleryOpen(false)} 
+            mediaByDate={mediaByDate}
+        />
+        </>
     )
 }
 
