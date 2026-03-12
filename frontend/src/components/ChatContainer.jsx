@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
-import { FileText, Download, Reply, Star, Forward, Play, Pause } from "lucide-react";
+import { FileText, Download, Reply, Star, Forward, Play, Pause, Trash2 } from "lucide-react";
 import { useChatStore } from "../store/useChatStore";
 import { useAuthStore } from "../store/useAuthStore";
 import { formatMessageTime } from "../lib/utils";
@@ -33,6 +33,9 @@ const ChatContainer = () => {
     toggleStarMessage,
     setForwardModalOpen,
     setMessageToForward,
+    deleteMessageForMe,
+    subscribeToDeletedForMeMessages,
+    unSubscribeFromDeletedForMeMessages,
   } = useChatStore();
 
   const { authUser, socket } = useAuthStore();
@@ -49,11 +52,13 @@ const ChatContainer = () => {
     getMessages(selectedUser._id);
     subscribeToReadReceipts();
     subscribeToReactions();
+    subscribeToDeletedForMeMessages();
 
     return () => {
       unSubscribeFromReadReceipts();
       unSubscribeFromReactions();
       unSubscribeFromDeletedMessages();
+      unSubscribeFromDeletedForMeMessages();
     };
   }, [
     selectedUser._id,
@@ -359,6 +364,13 @@ const ChatContainer = () => {
                   title="Forward"
                 >
                   <Forward size={14} />
+                </button>
+                <button
+                  onClick={() => deleteMessageForMe(message._id)}
+                  className="btn btn-circle btn-ghost btn-xs text-zinc-400 hover:text-red-500"
+                  title="Delete for me"
+                >
+                  <Trash2 size={14} />
                 </button>
               </div>
             </div>

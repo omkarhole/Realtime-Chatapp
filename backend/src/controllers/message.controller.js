@@ -180,7 +180,11 @@ export const getMessage = async (req, res) => {
       return res.status(200).json([]);
     }
 
-    const messages = await Message.find({ conversationId: conversation._id })
+    const userId = req.user._id;
+    const messages = await Message.find({ 
+      conversationId: conversation._id,
+      deletedForMe: { $ne: userId }
+    })
       .sort({ createdAt: 1 })
       .populate("senderId", "fullName profilePic username")
       .populate("receiverId", "fullName profilePic username");
@@ -524,6 +528,60 @@ export const getStarredMessages = async (req, res) => {
 };
 
 // Forward a message to users or groups
+export const deleteMessageForMe = async (req, res) => {
+  try {
+    const { messageId } = req.params;
+    const userId = req.user._id;
+
+    const message = await Message.findById(messageId).populate("senderId receiverId", "fullName profilePic username");
+    if (!message) {
+      return res.status(404).json({ message: "Message not found" });
+    }
+
+    // Only allow delete for own messages or messages in your conversations
+    const isOwnMessage = message.senderId._id.toString() === userId.toString();
+    const isOwnMessage = message.senderId._id.toString() === userId.toString();
+    const isInConversation = message.conversationId ? 
+      !!(await Conversation.findOne({ _id: message.conversationId, participants: userId })) 
+      : false;
+
+    if (!isOwnMessage && !isInConversation) {
+      return res.status(403).json({ message: "Unauthorized to delete this message" });
+    }
+
+    // Add user to deletedForMe if not already
+    if (!message.deletedForMe.some(id => id.toString() === userId.toString())) {
+      message.deletedForMe.push(userId);
+      await message.save();
+    }
+
+    // Emit to relevant users (sender, receiver, conversation participants)
+    const senderSocketId = getReciverSocketId(message.senderId._id.toString());
+    const receiverSocketId = message.receiverId ? getReciverSocketId(message.receiverId._id.toString()) : null;
+    
+    const deleteData = {
+      messageId,
+      deletedForMe: message.deletedForMe.map(id => id.toString()),
+      userId: userId.toString()
+    };
+
+    if (senderSocketId) io.to(senderSocketId).emit("messageDeletedForMe", deleteData);
+    if (receiverSocketId && receiverSocketId !== senderSocketId) io.to(receiverSocketId).emit("messageDeletedForMe", deleteData);
+
+    if (message.conversationId) {
+      io.to(message.conversationId.toString()).emit("messageDeletedForMe", deleteData);
+    }
+
+    return res.status(200).json({ 
+      message: "Message deleted for you",
+      deletedForMe: message.deletedForMe 
+    });
+  } catch (err) {
+    console.error("Error deleting message for me:", err);
+    return res.status(500).json({ message: "Internal Server Error" });
+  }
+};
+
 export const forwardMessage = async (req, res) => {
   try {
     const { messageId } = req.params;
