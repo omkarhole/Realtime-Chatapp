@@ -43,6 +43,7 @@ export const useChatStore = create((set,get) => ({
     messages: [],
     users: [],
     selectedUser: null,
+    selectedConversationId: null,
     isUsersLoading: false,
     isMessagesLoading: false,
     isSendingMessage: false,
@@ -112,7 +113,10 @@ export const useChatStore = create((set,get) => ({
         try {
             set({ isMessagesLoading: true })
             const res = await axiosInstance.get(`/messages/${userId}`);
-            set({ messages: res.data });
+            const messages = res.data;
+            // Extract conversationId from the first message if available
+            const conversationId = messages.length > 0 ? messages[0].conversationId : null;
+            set({ messages, selectedConversationId: conversationId });
         }
         catch (err) {
             console.log("error in getting messages", err);
@@ -177,7 +181,7 @@ export const useChatStore = create((set,get) => ({
             set((state) => ({ messages: upsertMessage(state.messages, messageWithStatus) }));
         });
     },
-    unSubscribeFromMessages:(){
+    unSubscribeFromMessages: () => {
         const socket=useAuthStore.getState().socket;
         if (!socket) return;
         socket.off("newMessage");
@@ -833,6 +837,11 @@ export const useChatStore = create((set,get) => ({
         }
     },
 
+// Media Gallery state
+    isMediaGalleryOpen: false,
+    mediaByDate: [],
+    isMediaLoading: false,
+
     // ==================== FORWARD MESSAGE ACTIONS ====================
     
     setForwardModalOpen: (isOpen) => set({ forwardModalOpen: isOpen }),
@@ -863,6 +872,33 @@ export const useChatStore = create((set,get) => ({
             console.log("Error forwarding message:", err);
             toast.error(getErrorMessage(err, "Failed to forward message"));
             return false;
+        }
+    },
+
+    // ==================== MEDIA GALLERY ACTIONS ====================
+    
+    setMediaGalleryOpen: (isOpen) => set({ isMediaGalleryOpen: isOpen }),
+    
+    getMedia: async () => {
+        const { selectedConversationId } = get();
+        
+        if (!selectedConversationId) {
+            toast.error("No conversation selected");
+            return;
+        }
+
+        set({ isMediaLoading: true });
+        try {
+            const res = await axiosInstance.get(`/messages/media/${selectedConversationId}`);
+            set({ mediaByDate: res.data.mediaByDate || [] });
+        }
+        catch (err) {
+            console.log("Error fetching media:", err);
+            toast.error(getErrorMessage(err, "Failed to load media gallery"));
+            set({ mediaByDate: [] });
+        }
+        finally {
+            set({ isMediaLoading: false });
         }
     }
 }));
