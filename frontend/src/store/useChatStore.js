@@ -401,6 +401,23 @@ export const useChatStore = create((set,get) => ({
         }
     },
 
+    deleteMessageForMe: async (messageId) => {
+        const { messages, selectedUser } = get();
+        
+        try {
+            const res = await axiosInstance.delete(`/messages/${messageId}/me`);
+            const updatedMessages = messages.map(msg => 
+                msg._id === messageId ? { ...msg, deletedForMe: [useAuthStore.getState().authUser._id] } : msg
+            );
+            set({ messages: updatedMessages });
+            toast.success("Message deleted for you");
+        }
+        catch (err) {
+            console.log("Error deleting message for me:", err);
+            toast.error(err.response?.data?.message || "Failed to delete message for you");
+        }
+    },
+
     subscribeToDeletedMessages: () => {
         const socket = useAuthStore.getState().socket;
         if (!socket) return;
@@ -421,6 +438,33 @@ export const useChatStore = create((set,get) => ({
         const socket = useAuthStore.getState().socket;
         if (!socket) return;
         socket.off("messageDeleted");
+    },
+
+    subscribeToDeletedForMeMessages: () => {
+        const socket = useAuthStore.getState().socket;
+        if (!socket) return;
+
+        socket.on("messageDeletedForMe", ({ messageId, deletedForMe, userId }) => {
+            const { messages } = get();
+            const authUserId = normalizeId(useAuthStore.getState().authUser?._id);
+            
+            // If this delete affects current user
+            if (deletedForMe.some(idStr => idStr === authUserId)) {
+                const updatedMessages = messages.map(msg => {
+                    if (msg._id === messageId) {
+                        return { ...msg, deletedForMe: deletedForMe };
+                    }
+                    return msg;
+                });
+                set({ messages: updatedMessages });
+            }
+        });
+    },
+
+    unSubscribeFromDeletedForMeMessages: () => {
+        const socket = useAuthStore.getState().socket;
+        if (!socket) return;
+        socket.off("messageDeletedForMe");
     },
 
     // ==================== STARRED MESSAGES ACTIONS ====================

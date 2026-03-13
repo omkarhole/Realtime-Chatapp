@@ -200,6 +200,16 @@ io.on("connection", (socket) => {
       to,
     });
   });
+
+  socket.on("deleteMessageForMe", ({ to, messageId, deletedForMe, userId }) => {
+    if (!to) return;
+    io.to(`user:${to}`).emit("messageDeletedForMe", {
+      messageId,
+      deletedForMe,
+      userId,
+      from: userId
+    });
+  });
 });
 
 export { io, app, server };

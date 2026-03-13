@@ -73,8 +73,14 @@ const messageSchema=new mongoose.Schema({
         ref: "User",
         default: []
     }],
+    deletedForMe: [{
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "User",
+        default: []
+    }],
 
 },
+
 {timestamps:true}
 
 );

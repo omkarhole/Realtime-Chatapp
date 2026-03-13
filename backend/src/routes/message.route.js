@@ -24,6 +24,9 @@ router.put("/mark-read/:senderId",protectRoute,markMessageAsRead)
 // Delete message for everyone
 router.delete("/:messageId",protectRoute, deleteMessage)
 
+// Delete message for me only
+router.delete("/:messageId/me", protectRoute, deleteMessageForMe)
+
 // Reaction routes
 router.post("/:messageId/reactions", protectRoute, addReaction)
 router.delete("/:messageId/reactions", protectRoute, removeReaction)
