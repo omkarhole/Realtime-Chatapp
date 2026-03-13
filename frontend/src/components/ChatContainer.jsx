@@ -1,5 +1,5 @@
-import React, { useEffect, useRef } from "react";
-import { FileText, Download, Reply, Star, Forward } from "lucide-react";
+import React, { useEffect, useRef, useState } from "react";
+import { FileText, Download, Reply, Star, Forward, Play, Pause } from "lucide-react";
 import { useChatStore } from "../store/useChatStore";
 import { useAuthStore } from "../store/useAuthStore";
 import { formatMessageTime } from "../lib/utils";
@@ -21,6 +21,7 @@ const ChatContainer = () => {
     getMessages,
     isMessagesLoading,
     selectedUser,
+    selectedGroup,
     markMessagesAsRead,
     subscribeToReadReceipts,
     unSubscribeFromReadReceipts,
@@ -37,6 +38,10 @@ const ChatContainer = () => {
   const { authUser, socket } = useAuthStore();
   const messagesEndRef = useRef(null);
   const isMarkingReadRef = useRef(false);
+  const audioRefs = useRef({});
+  
+  const [playingAudioId, setPlayingAudioId] = useState(null);
+  const [audioProgress, setAudioProgress] = useState({});
 
   const isGroup = !!selectedGroup;
 
@@ -100,6 +105,50 @@ const ChatContainer = () => {
     return decodeURIComponent(fileName.replace(/\.[^/.]+$/, ""));
   };
 
+  const formatAudioTime = (seconds) => {
+    if (!seconds || isNaN(seconds)) return "0:00";
+    const mins = Math.floor(seconds / 60);
+    const secs = Math.floor(seconds % 60);
+    return `${mins}:${secs.toString().padStart(2, "0")}`;
+  };
+
+  const toggleAudioPlayback = (messageId, audioUrl) => {
+    const audio = audioRefs.current[messageId];
+    if (!audio) return;
+
+    if (playingAudioId === messageId) {
+      audio.pause();
+      setPlayingAudioId(null);
+    } else {
+      // Stop any other audio that's playing
+      if (playingAudioId) {
+        const previousAudio = audioRefs.current[playingAudioId];
+        if (previousAudio) previousAudio.pause();
+      }
+      audio.play();
+      setPlayingAudioId(messageId);
+    }
+  };
+
+  const handleAudioTimeUpdate = (messageId, duration) => {
+    const audio = audioRefs.current[messageId];
+    if (audio && duration) {
+      const progress = (audio.currentTime / duration) * 100;
+      setAudioProgress(prev => ({
+        ...prev,
+        [messageId]: progress
+      }));
+    }
+  };
+
+  const handleAudioEnded = (messageId) => {
+    setPlayingAudioId(null);
+    setAudioProgress(prev => ({
+      ...prev,
+      [messageId]: 0
+    }));
+  };
+
   const hasUserReacted = (reactions, emoji) =>
     reactions?.some(
       (reaction) =>
@@ -141,6 +190,7 @@ const ChatContainer = () => {
     let previewText = "Message";
     if (replyMessage.image) previewText = "Photo";
     else if (replyMessage.pdf) previewText = "Document";
+    else if (replyMessage.audio) previewText = "Voice Message";
     else if (replyMessage.text) {
       previewText =
         replyMessage.text.length > 30
@@ -282,6 +332,8 @@ const ChatContainer = () => {
                   <Download size={16} className="text-zinc-400 flex-shrink-0" />
                 </a>
               )}
+
+              {message.audio && renderAudioPlayer(message)}
 
               {message.text && <p>{message.text}</p>}
 
