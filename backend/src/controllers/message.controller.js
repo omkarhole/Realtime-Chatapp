@@ -65,9 +65,21 @@ export const getUsersForSidebar = async (req, res) => {
     const searchQuery = req.query.q?.trim();
     const isSearchMode = req.query.search === "true";
 
+    // Get logged-in user's blocked users and users who blocked them
+    const loggedInUser = await User.findById(loggedInObjectId);
+    const blockedUserIds = loggedInUser.blockedUsers.map(id => new mongoose.Types.ObjectId(id));
+    
+    // Get all users who have blocked the logged-in user
+    const usersWhoBlockedMe = await User.find({
+      blockedUsers: loggedInObjectId
+    });
+    const usersWhoBlockedMeIds = usersWhoBlockedMe.map(u => new mongoose.Types.ObjectId(u._id));
+
+    const allBlockedIds = [...blockedUserIds, ...usersWhoBlockedMeIds];
+
     if (isSearchMode && searchQuery) {
       const query = {
-        _id: { $ne: loggedInObjectId },
+        _id: { $ne: loggedInObjectId, $nin: allBlockedIds },
       };
 
       const safeQuery = escapeRegex(searchQuery);
@@ -105,7 +117,7 @@ export const getUsersForSidebar = async (req, res) => {
           lastMessageAt: 1,
         },
       },
-      { $match: { partnerId: { $ne: null } } },
+      { $match: { partnerId: { $ne: null, $nin: allBlockedIds } } },
     ]);
 
     const legacyConversationPartners = await Message.aggregate([
@@ -131,6 +143,7 @@ export const getUsersForSidebar = async (req, res) => {
         },
       },
       { $project: { partnerId: "$_id", lastMessageAt: 1, _id: 0 } },
+      { $match: { partnerId: { $nin: allBlockedIds } } },
     ]);
 
     const mergedMap = new Map();
@@ -170,6 +183,14 @@ export const getMessage = async (req, res) => {
   try {
     const userToChatId = req.params.id?.toString();
     const myId = req.user._id.toString();
+
+    const myUser = await User.findById(myId);
+    const otherUser = await User.findById(userToChatId);
+
+    // Check if users have blocked each other
+    if (myUser.blockedUsers.includes(userToChatId) || otherUser.blockedUsers.includes(myId)) {
+      return res.status(403).json({ message: "Cannot access messages with this user" });
+    }
 
     let conversation = await findConversationByUsers(myId, userToChatId);
     if (!conversation) {
@@ -211,9 +232,21 @@ export const sendMessage = async (req, res) => {
       return res.status(400).json({ message: "Cannot send message to yourself" });
     }
 
-    const receiverExists = await User.exists({ _id: receiverId });
-    if (!receiverExists) {
+    const receiver = await User.findById(receiverId);
+    if (!receiver) {
       return res.status(404).json({ message: "Receiver not found" });
+    }
+
+    const sender = await User.findById(senderId);
+    
+    // Check if sender has blocked the receiver
+    if (sender.blockedUsers.includes(receiverId)) {
+      return res.status(403).json({ message: "You have blocked this user" });
+    }
+    
+    // Check if receiver has blocked the sender
+    if (receiver.blockedUsers.includes(senderId)) {
+      return res.status(403).json({ message: "This user has blocked you" });
     }
 
     let conversation = await findConversationByUsers(senderId, receiverId);

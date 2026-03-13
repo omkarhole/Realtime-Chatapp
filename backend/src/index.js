@@ -7,6 +7,7 @@ import { connectDB } from "./lib/db.js";
 import authRoutes from "./routes/auth.route.js";
 import messageRoutes from "./routes/message.route.js";
 import groupRoutes from "./routes/group.route.js";
+import privacyRoutes from "./routes/privacy.route.js";
 import { app, server } from "./lib/socket.js";
 import { UPLOAD, SERVER } from "./constants/index.js";
 
@@ -43,6 +44,9 @@ app.use("/api/messages",messageRoutes)
 
 // group routes
 app.use("/api/groups", groupRoutes)
+
+// privacy routes
+app.use("/api/privacy", privacyRoutes)
 
 
 if (process.env.NODE_ENV === "production") {
