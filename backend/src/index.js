@@ -10,6 +10,7 @@ import groupRoutes from "./routes/group.route.js";
 import privacyRoutes from "./routes/privacy.route.js";
 import { app, server } from "./lib/socket.js";
 import { UPLOAD, SERVER } from "./constants/index.js";
+import logger from "./lib/logger.js";
 
 dotenv.config({ path: ".local.env", quiet: true });
 dotenv.config({ path: ".env", quiet: true });
@@ -63,17 +64,26 @@ app.get("/",(req,res)=>{
 
 server.on("error", (err) => {
   if (err.code === "EADDRINUSE") {
-    console.error(
-      `Port ${PORT} is already in use. Stop the existing backend process first, then restart nodemon.`
-    );
+    logger.error("Server port is already in use", {
+      context: "server.startup",
+      port: PORT,
+      error: err.message,
+    });
     process.exit(1);
   }
 
-  console.error("Server startup error:", err);
+  logger.error("Server startup error", {
+    context: "server.startup",
+    error: err.message,
+    stack: err.stack,
+  });
   process.exit(1);
 });
 
 server.listen(PORT,()=>{
-    console.log(`server is running on port ${PORT}`);
+    logger.info("Server is running", {
+      context: "server.startup",
+      port: PORT,
+    });
     connectDB()
 })

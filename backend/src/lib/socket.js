@@ -6,6 +6,7 @@ import dotenv from "dotenv";
 import User from "../models/user.model.js";
 import Conversation from "../models/conversation.model.js";
 import { createRoomKey } from "./conversation.js";
+import logger from "./logger.js";
 
 dotenv.config({ path: ".local.env", quiet: true });
 dotenv.config({ path: ".env", quiet: true });
@@ -20,7 +21,10 @@ const allowedOrigins = [process.env.FRONTEND_URL].filter(Boolean);
 
 const logSocketWarning = (message, error) => {
   if (process.env.NODE_ENV !== "production") {
-    console.warn(message, error?.message || error);
+    logger.warn(message, {
+      context: "socket",
+      error: error?.message || error,
+    });
   }
 };
 
