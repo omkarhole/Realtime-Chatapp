@@ -3,6 +3,7 @@ import User from "../models/user.model.js";
 import bcrypt from "bcryptjs";
 import cloudinary from "../lib/cloudinary.js";
 import { sendEmail } from "../lib/email.js";
+import logger from "../lib/logger.js";
 
 const normalizeEmail = (email = "") => email.trim().toLowerCase();
 const normalizeUsername = (username = "") => username.trim().toLowerCase();
@@ -91,7 +92,11 @@ export const signup = async (req, res) => {
     const token = generateToken(newUser._id, res);
     return res.status(201).json(buildAuthUserResponse(newUser, "User created successfully", token));
   } catch (err) {
-    console.log("error in signup controller", err);
+    logger.error("Signup controller failed", {
+      context: "auth.signup",
+      error: err.message,
+      stack: err.stack,
+    });
     return res.status(500).json({ message: "Internal server error" });
   }
 };
@@ -130,7 +135,11 @@ export const login = async (req, res) => {
 
     return res.status(200).json(buildAuthUserResponse(user, "Login successful", token));
   } catch (err) {
-    console.log("error in login controller", err);
+    logger.error("Login controller failed", {
+      context: "auth.login",
+      error: err.message,
+      stack: err.stack,
+    });
     return res.status(500).json({ message: "Internal server error" });
   }
 };
@@ -145,7 +154,11 @@ export const logout = async (req, res) => {
     });
     return res.status(200).json({ message: "Logout successful" });
   } catch (err) {
-    console.log("error in logout controller", err);
+    logger.error("Logout controller failed", {
+      context: "auth.logout",
+      error: err.message,
+      stack: err.stack,
+    });
     return res.status(500).json({ message: "Internal server error" });
   }
 };
@@ -167,7 +180,11 @@ export const updateProfile = async (req, res) => {
 
     return res.status(200).json(updatedUser);
   } catch (err) {
-    console.log("error in update profile controller", err);
+    logger.error("Update profile controller failed", {
+      context: "auth.updateProfile",
+      error: err.message,
+      stack: err.stack,
+    });
     return res.status(500).json({ message: "Internal server error" });
   }
 };
@@ -177,7 +194,11 @@ export const checkAuth = async (req, res) => {
     const token = generateToken(req.user._id, res);
     return res.status(200).json(buildAuthUserResponse(req.user, null, token));
   } catch (err) {
-    console.log("error in check auth controller", err);
+    logger.error("Check auth controller failed", {
+      context: "auth.checkAuth",
+      error: err.message,
+      stack: err.stack,
+    });
     return res.status(500).json({ message: "Internal server error" });
   }
 };
@@ -208,13 +229,25 @@ export const forgotPassword = async (req, res) => {
 
     try {
       const emailResponse = await sendEmail(mailOption);
-      console.log("Email sent successfully:", emailResponse);
+      logger.info("Forgot password OTP email sent", {
+        context: "auth.forgotPassword",
+        messageId: emailResponse?.messageId,
+      });
       return res.status(200).json({ message: "OTP sent to email" });
     } catch (err) {
-      console.error("otp mailed failed", err.message);
+      logger.error("Failed to send forgot password OTP email", {
+        context: "auth.forgotPassword",
+        error: err.message,
+        stack: err.stack,
+      });
       return res.status(500).json({ message: "Failed to send OTP email" });
     }
   } catch (error) {
+    logger.error("Forgot password controller failed", {
+      context: "auth.forgotPassword",
+      error: error.message,
+      stack: error.stack,
+    });
     return res.status(500).json({ message: "Internal server error" });
   }
 };
@@ -248,7 +281,11 @@ export const resetPassword = async (req, res) => {
 
     return res.status(200).json({ message: "Password reset successfully" });
   } catch (error) {
-    console.log("error in reset password controller", error);
+    logger.error("Reset password controller failed", {
+      context: "auth.resetPassword",
+      error: error.message,
+      stack: error.stack,
+    });
     return res.status(500).json({ message: "Internal server error" });
   }
 };

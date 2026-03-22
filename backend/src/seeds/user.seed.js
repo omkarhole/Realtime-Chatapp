@@ -1,6 +1,7 @@
 import { config } from "dotenv";
 import { connectDB } from "../lib/db.js";
 import User from "../models/user.model.js";
+import logger from "../lib/logger.js";
 
 config();
 
@@ -105,9 +106,15 @@ const seedDatabase = async () => {
     await connectDB();
 
     await User.insertMany(seedUsers);
-    console.log("Database seeded successfully");
+    logger.info("Database seeded successfully", {
+      context: "seed.users",
+    });
   } catch (error) {
-    console.error("Error seeding database:", error);
+    logger.error("Error seeding database", {
+      context: "seed.users",
+      error: error.message,
+      stack: error.stack,
+    });
   }
 };
 

@@ -3,6 +3,7 @@ import Message from "../models/message.model.js";
 import User from "../models/user.model.js";
 import { uploadImage, uploadPdf, uploadAudio, uploadAvatar } from "../lib/cloudinaryUpload.js";
 import { io } from "../lib/socket.js";
+import logger from "../lib/logger.js";
 
 // Create a new group
 export const createGroup = async (req, res) => {
@@ -31,7 +32,11 @@ export const createGroup = async (req, res) => {
 
         res.status(201).json(newGroup);
     } catch (err) {
-        console.error("Error creating group:", err);
+        logger.error("Create group failed", {
+            context: "group.createGroup",
+            error: err.message,
+            stack: err.stack,
+        });
         res.status(500).json({ message: "Internal Server Error" });
     }
 };
@@ -48,7 +53,11 @@ export const getMyGroups = async (req, res) => {
 
         res.status(200).json(groups);
     } catch (err) {
-        console.error("Error fetching groups:", err);
+        logger.error("Fetch groups failed", {
+            context: "group.getMyGroups",
+            error: err.message,
+            stack: err.stack,
+        });
         res.status(500).json({ message: "Internal Server Error" });
     }
 };
@@ -74,7 +83,11 @@ export const getGroupById = async (req, res) => {
 
         res.status(200).json(group);
     } catch (err) {
-        console.error("Error fetching group:", err);
+        logger.error("Fetch group by id failed", {
+            context: "group.getGroupById",
+            error: err.message,
+            stack: err.stack,
+        });
         res.status(500).json({ message: "Internal Server Error" });
     }
 };
@@ -120,7 +133,11 @@ export const updateGroup = async (req, res) => {
 
         res.status(200).json(group);
     } catch (err) {
-        console.error("Error updating group:", err);
+        logger.error("Update group failed", {
+            context: "group.updateGroup",
+            error: err.message,
+            stack: err.stack,
+        });
         res.status(500).json({ message: "Internal Server Error" });
     }
 };
@@ -167,7 +184,11 @@ export const addMember = async (req, res) => {
 
         res.status(200).json(group);
     } catch (err) {
-        console.error("Error adding member:", err);
+        logger.error("Add group member failed", {
+            context: "group.addMember",
+            error: err.message,
+            stack: err.stack,
+        });
         res.status(500).json({ message: "Internal Server Error" });
     }
 };
@@ -212,7 +233,11 @@ export const removeMember = async (req, res) => {
 
         res.status(200).json(group);
     } catch (err) {
-        console.error("Error removing member:", err);
+        logger.error("Remove group member failed", {
+            context: "group.removeMember",
+            error: err.message,
+            stack: err.stack,
+        });
         res.status(500).json({ message: "Internal Server Error" });
     }
 };
@@ -253,7 +278,11 @@ export const leaveGroup = async (req, res) => {
 
         res.status(200).json({ message: "Left group successfully" });
     } catch (err) {
-        console.error("Error leaving group:", err);
+        logger.error("Leave group failed", {
+            context: "group.leaveGroup",
+            error: err.message,
+            stack: err.stack,
+        });
         res.status(500).json({ message: "Internal Server Error" });
     }
 };
@@ -292,7 +321,11 @@ export const deleteGroup = async (req, res) => {
 
         res.status(200).json({ message: "Group deleted successfully" });
     } catch (err) {
-        console.error("Error deleting group:", err);
+        logger.error("Delete group failed", {
+            context: "group.deleteGroup",
+            error: err.message,
+            stack: err.stack,
+        });
         res.status(500).json({ message: "Internal Server Error" });
     }
 };
@@ -356,7 +389,11 @@ export const sendGroupMessage = async (req, res) => {
 
         res.status(201).json(newMessage);
     } catch (err) {
-        console.error("Error sending group message:", err);
+        logger.error("Send group message failed", {
+            context: "group.sendGroupMessage",
+            error: err.message,
+            stack: err.stack,
+        });
         res.status(500).json({ message: "Internal Server Error" });
     }
 };
@@ -385,7 +422,11 @@ export const getGroupMessages = async (req, res) => {
 
         res.status(200).json(messages);
     } catch (err) {
-        console.error("Error fetching group messages:", err);
+        logger.error("Fetch group messages failed", {
+            context: "group.getGroupMessages",
+            error: err.message,
+            stack: err.stack,
+        });
         res.status(500).json({ message: "Internal Server Error" });
     }
 };
@@ -416,7 +457,11 @@ export const getAvailableUsers = async (req, res) => {
 
         res.status(200).json(availableUsers);
     } catch (err) {
-        console.error("Error fetching available users:", err);
+        logger.error("Fetch available users failed", {
+            context: "group.getAvailableUsers",
+            error: err.message,
+            stack: err.stack,
+        });
         res.status(500).json({ message: "Internal Server Error" });
     }
 };

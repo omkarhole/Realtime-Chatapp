@@ -1,4 +1,5 @@
 import SibApiV3Sdk from "sib-api-v3-sdk";
+import logger from "./logger.js";
 
 const emailApi = new SibApiV3Sdk.TransactionalEmailsApi();
 
@@ -19,7 +20,11 @@ export const sendEmail = async ({ to, subject, text }) => {
         });
         return response;
     } catch (error) {
-        console.error("Email API Error:", error.message);
+        logger.error("Email API request failed", {
+            context: "email.send",
+            error: error.message,
+            stack: error.stack,
+        });
         throw error;
     }
 };

@@ -2,6 +2,7 @@ import mongoose from "mongoose";
 import User from "../models/user.model.js";
 import Report from "../models/report.model.js";
 import Message from "../models/message.model.js";
+import logger from "../lib/logger.js";
 
 // Block a user
 export const blockUser = async (req, res) => {
@@ -33,7 +34,11 @@ export const blockUser = async (req, res) => {
 
     return res.status(200).json({ message: "User blocked successfully" });
   } catch (err) {
-    console.error("Error blocking user:", err);
+    logger.error("Block user failed", {
+      context: "privacy.blockUser",
+      error: err.message,
+      stack: err.stack,
+    });
     return res.status(500).json({ message: "Internal Server Error" });
   }
 };
@@ -63,7 +68,11 @@ export const unblockUser = async (req, res) => {
 
     return res.status(200).json({ message: "User unblocked successfully" });
   } catch (err) {
-    console.error("Error unblocking user:", err);
+    logger.error("Unblock user failed", {
+      context: "privacy.unblockUser",
+      error: err.message,
+      stack: err.stack,
+    });
     return res.status(500).json({ message: "Internal Server Error" });
   }
 };
@@ -83,7 +92,11 @@ export const getBlockedUsers = async (req, res) => {
 
     return res.status(200).json({ blockedUsers: user.blockedUsers });
   } catch (err) {
-    console.error("Error fetching blocked users:", err);
+    logger.error("Fetch blocked users failed", {
+      context: "privacy.getBlockedUsers",
+      error: err.message,
+      stack: err.stack,
+    });
     return res.status(500).json({ message: "Internal Server Error" });
   }
 };
@@ -152,7 +165,11 @@ export const reportUser = async (req, res) => {
       reportId: report._id,
     });
   } catch (err) {
-    console.error("Error reporting user:", err);
+    logger.error("Report user failed", {
+      context: "privacy.reportUser",
+      error: err.message,
+      stack: err.stack,
+    });
     return res.status(500).json({ message: "Internal Server Error" });
   }
 };
@@ -171,7 +188,11 @@ export const getReports = async (req, res) => {
 
     return res.status(200).json({ reports });
   } catch (err) {
-    console.error("Error fetching reports:", err);
+    logger.error("Fetch reports failed", {
+      context: "privacy.getReports",
+      error: err.message,
+      stack: err.stack,
+    });
     return res.status(500).json({ message: "Internal Server Error" });
   }
 };
@@ -187,7 +208,11 @@ export const isUserBlocked = async (req, res) => {
 
     return res.status(200).json({ isBlocked });
   } catch (err) {
-    console.error("Error checking block status:", err);
+    logger.error("Check block status failed", {
+      context: "privacy.isUserBlocked",
+      error: err.message,
+      stack: err.stack,
+    });
     return res.status(500).json({ message: "Internal Server Error" });
   }
 };

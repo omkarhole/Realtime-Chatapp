@@ -5,6 +5,7 @@ import { getReciverSocketId, io } from "../lib/socket.js";
 import Conversation from "../models/conversation.model.js";
 import Message from "../models/message.model.js";
 import User from "../models/user.model.js";
+import logger from "../lib/logger.js";
 
 const escapeRegex = (value = "") => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
@@ -173,7 +174,11 @@ export const getUsersForSidebar = async (req, res) => {
 
     return res.status(200).json({ filterUsers });
   } catch (err) {
-    console.error("Error fetching users for sidebar:", err);
+    logger.error("Fetch sidebar users failed", {
+      context: "message.getUsersForSidebar",
+      error: err.message,
+      stack: err.stack,
+    });
     return res.status(500).json({ message: "Internal Server Error" });
   }
 };
@@ -212,7 +217,11 @@ export const getMessage = async (req, res) => {
 
     return res.status(200).json(messages);
   } catch (err) {
-    console.error("Error fetching messages:", err);
+    logger.error("Fetch messages failed", {
+      context: "message.getMessage",
+      error: err.message,
+      stack: err.stack,
+    });
     return res.status(500).json({ message: "Internal Server Error" });
   }
 };
@@ -303,7 +312,11 @@ export const sendMessage = async (req, res) => {
 
     return res.status(201).json(populatedMessage);
   } catch (err) {
-    console.error("Error sending message:", err);
+    logger.error("Send message failed", {
+      context: "message.sendMessage",
+      error: err.message,
+      stack: err.stack,
+    });
     return res.status(500).json({ message: "Internal Server Error" });
   }
 };
@@ -332,7 +345,11 @@ export const markMessageAsRead = async (req, res) => {
       count: updatedMessages.modifiedCount,
     });
   } catch (err) {
-    console.error("Error marking messages as read:", err);
+    logger.error("Mark messages as read failed", {
+      context: "message.markMessageAsRead",
+      error: err.message,
+      stack: err.stack,
+    });
     return res.status(500).json({ message: "Internal Server Error" });
   }
 };
@@ -358,7 +375,11 @@ export const searchMessages = async (req, res) => {
 
     return res.status(200).json(messages);
   } catch (err) {
-    console.error("Error searching messages:", err);
+    logger.error("Search messages failed", {
+      context: "message.searchMessages",
+      error: err.message,
+      stack: err.stack,
+    });
     return res.status(500).json({ message: "Internal Server Error" });
   }
 };
@@ -377,7 +398,11 @@ export const getAllMessages = async (req, res) => {
 
     return res.status(200).json(messages);
   } catch (err) {
-    console.error("Error exporting messages:", err);
+    logger.error("Export messages failed", {
+      context: "message.getAllMessages",
+      error: err.message,
+      stack: err.stack,
+    });
     return res.status(500).json({ message: "Internal Server Error" });
   }
 };
@@ -436,7 +461,11 @@ export const addReaction = async (req, res) => {
 
     return res.status(200).json(updatedMessage);
   } catch (err) {
-    console.error("Error adding reaction:", err);
+    logger.error("Add reaction failed", {
+      context: "message.addReaction",
+      error: err.message,
+      stack: err.stack,
+    });
     return res.status(500).json({ message: "Internal Server Error" });
   }
 };
@@ -485,7 +514,11 @@ export const removeReaction = async (req, res) => {
 
     return res.status(200).json(updatedMessage);
   } catch (err) {
-    console.error("Error removing reaction:", err);
+    logger.error("Remove reaction failed", {
+      context: "message.removeReaction",
+      error: err.message,
+      stack: err.stack,
+    });
     return res.status(500).json({ message: "Internal Server Error" });
   }
 };
@@ -535,7 +568,11 @@ export const toggleStarMessage = async (req, res) => {
       starredBy: updatedMessage.starredBy,
     });
   } catch (err) {
-    console.error("Error toggling star:", err);
+    logger.error("Toggle star message failed", {
+      context: "message.toggleStarMessage",
+      error: err.message,
+      stack: err.stack,
+    });
     return res.status(500).json({ message: "Internal Server Error" });
   }
 };
@@ -555,7 +592,11 @@ export const getStarredMessages = async (req, res) => {
 
     return res.status(200).json(messages);
   } catch (err) {
-    console.error("Error fetching starred messages:", err);
+    logger.error("Fetch starred messages failed", {
+      context: "message.getStarredMessages",
+      error: err.message,
+      stack: err.stack,
+    });
     return res.status(500).json({ message: "Internal Server Error" });
   }
 };
@@ -609,7 +650,11 @@ export const deleteMessageForMe = async (req, res) => {
       deletedForMe: message.deletedForMe 
     });
   } catch (err) {
-    console.error("Error deleting message for me:", err);
+    logger.error("Delete message for me failed", {
+      context: "message.deleteMessageForMe",
+      error: err.message,
+      stack: err.stack,
+    });
     return res.status(500).json({ message: "Internal Server Error" });
   }
 };
@@ -742,7 +787,12 @@ export const forwardMessage = async (req, res) => {
           });
         }
       } catch (recipientError) {
-        console.error(`Error forwarding to ${recipient.id}:`, recipientError);
+        logger.error("Forwarding to recipient failed", {
+          context: "message.forwardMessage.recipient",
+          recipientId: recipient.id,
+          error: recipientError.message,
+          stack: recipientError.stack,
+        });
         errors.push({ recipient: recipient.id, error: recipientError.message });
       }
     }
@@ -763,7 +813,11 @@ export const forwardMessage = async (req, res) => {
     });
 
   } catch (err) {
-    console.error("Error forwarding message:", err);
+    logger.error("Forward message failed", {
+      context: "message.forwardMessage",
+      error: err.message,
+      stack: err.stack,
+    });
     return res.status(500).json({ message: "Internal Server Error" });
   }
 };
@@ -838,7 +892,11 @@ export const getMedia = async (req, res) => {
     });
 
   } catch (err) {
-    console.error("Error fetching media:", err);
+    logger.error("Fetch media failed", {
+      context: "message.getMedia",
+      error: err.message,
+      stack: err.stack,
+    });
     return res.status(500).json({ message: "Internal Server Error" });
   }
 };

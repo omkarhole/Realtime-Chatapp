@@ -1,4 +1,5 @@
 import mongoose from 'mongoose';
+import logger from './logger.js';
 
 export const connectDB=async()=>{
     try{
@@ -8,7 +9,10 @@ export const connectDB=async()=>{
        }
 
        const conn = await mongoose.connect(mongoUri)
-       console.log(`MongoDB Connected: ${conn.connection.host}`)
+       logger.info("MongoDB connected", {
+         context: "db.connect",
+         host: conn.connection.host,
+       });
 
        // Cleanup stale index left from older schema versions.
        // It blocks signups with: duplicate key error index userId_1.
@@ -18,10 +22,17 @@ export const connectDB=async()=>{
 
        if (hasDeprecatedUserIdIndex) {
          await userCollection.dropIndex("userId_1");
-         console.log("Dropped deprecated users index: userId_1");
+         logger.info("Dropped deprecated users index", {
+           context: "db.connect",
+           index: "userId_1",
+         });
        }
     }
     catch(err){
-        console.log("mongoDB connection error",err);
+        logger.error("MongoDB connection error", {
+          context: "db.connect",
+          error: err.message,
+          stack: err.stack,
+        });
     }
 }
