@@ -41,7 +41,8 @@ cd Realtime-Chatapp
 cd backend && npm install
 cd ../frontend && npm install
 
-# Configure backend/.local.env
+# Copy .env.example to .env and fill values. Use .local.env for local overrides (gitignored).
+# Configure backend/.env or backend/.local.env
 PORT=5001
 MONGODB_URI=your_mongodb_uri
 JWT_SECRET=your_secret
