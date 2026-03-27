@@ -12,8 +12,10 @@ import { app, server } from "./lib/socket.js";
 import { UPLOAD, SERVER } from "./constants/index.js";
 import logger from "./lib/logger.js";
 
-dotenv.config({ path: ".local.env", quiet: true });
-dotenv.config({ path: ".env", quiet: true });
+dotenv.config({
+  path: process.env.NODE_ENV === "development" ? ".local.env" : ".env",
+  override: true,
+});
 
 app.use(express.json({ limit: UPLOAD.JSON_LIMIT }));
 app.use(cookieParser());
@@ -48,6 +50,32 @@ app.use("/api/groups", groupRoutes)
 
 // privacy routes
 app.use("/api/privacy", privacyRoutes)
+
+app.get("/api/health", (req, res) => {
+  const configKeys = [
+    "NODE_ENV",
+    "PORT",
+    "FRONTEND_URL",
+    "JWT_SECRET",
+    "MONGODB_URI",
+    "MONGODB_URL",
+    "CLOUDINARY_CLOUD_NAME",
+    "CLOUDINARY_API_KEY",
+    "CLOUDINARY_API_SECRET",
+    "BREVO_API_KEY",
+    "SENDER_EMAIL",
+    "LOG_LEVEL",
+  ];
+
+  const env = Object.fromEntries(
+    configKeys.map((key) => [key, Boolean(process.env[key])])
+  );
+
+  res.status(200).json({
+    status: "ok",
+    env,
+  });
+});
 
 
 if (process.env.NODE_ENV === "production") {
